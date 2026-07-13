@@ -248,11 +248,16 @@ EOF
   echo "🔧 Installing and configuring Nginx..."
   sudo apt-get install -y nginx
   REPO_ROOT="$(pwd)"
+  # Disable the default Nginx site if present
+  sudo rm -f /etc/nginx/sites-enabled/default
+  sudo rm -f /etc/nginx/sites-available/default
+
   # Create nginx site config
   NGINX_CONF="/etc/nginx/sites-available/coex"
   sudo tee "$NGINX_CONF" >/dev/null <<EOF
 server {
-    listen 80;
+    listen 80 default_server;
+    listen [::]:80 default_server;
     server_name _;
 
     location /api/ {
@@ -261,6 +266,8 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
     }
 
     location /_next/ {
@@ -269,6 +276,8 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
     }
 
     location / {
@@ -277,6 +286,8 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
     }
 }
 EOF
