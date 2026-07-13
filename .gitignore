@@ -1,0 +1,29 @@
+# Python
+*.pyc
+__pycache__/
+.venv/
+.venv_backend/
+venv/
+env/
+instance/*.db
+.env
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Secrets and keys
+*.pem
+*.key
+
+# Logs
+*.log
