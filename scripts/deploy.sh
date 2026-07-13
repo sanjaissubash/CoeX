@@ -14,7 +14,14 @@ git fetch --all
 git reset --hard origin/main
 
 echo "🐍 Updating Python backend dependencies..."
-./.venv/bin/python -m pip install -r backend/requirements.txt
+if [ -x "./venv/bin/python" ]; then
+  BACKEND_PY="./venv/bin/python"
+elif [ -x "./.venv/bin/python" ]; then
+  BACKEND_PY="./.venv/bin/python"
+else
+  BACKEND_PY="python3"
+fi
+"${BACKEND_PY}" -m pip install -r backend/requirements.txt
 
 echo "🎨 Installing frontend packages..."
 cd frontend
