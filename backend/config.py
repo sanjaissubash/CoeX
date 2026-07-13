@@ -1,10 +1,14 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.parent
 
 class Config:
     """Base configuration."""
-    SQLALCHEMY_DATABASE_URI = f"sqlite:///{BASE_DIR}/storage/coex.db"
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        "SQLALCHEMY_DATABASE_URI",
+        f"sqlite:///{BASE_DIR}/storage/coex.db",
+    )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     STORAGE_ROOT = str(BASE_DIR / "storage")
     JSON_SORT_KEYS = False

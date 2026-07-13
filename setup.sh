@@ -326,6 +326,7 @@ User=$(whoami)
 WorkingDirectory=${REPO_ROOT}/frontend
 Environment=NODE_ENV=production
 Environment=PORT=3000
+Environment=NEXT_PUBLIC_API_URL=/api
 ExecStart=/bin/bash -lc 'npm run start'
 Restart=on-failure
 

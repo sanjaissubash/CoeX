@@ -1,9 +1,16 @@
 from flask import Flask
-from .config import config
-from .database import db, init_db
 import logging
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+from .database import db, init_db
 from flask_cors import CORS
+
+# Load environment variables from backend/.env before importing config.
+# This ensures SQLALCHEMY_DATABASE_URI and FLASK_ENV are honored when config.py is evaluated.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+from .config import config
 
 
 def create_app(config_name: str = "default") -> Flask:
