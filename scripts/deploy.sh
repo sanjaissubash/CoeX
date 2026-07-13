@@ -14,7 +14,7 @@ git fetch --all
 git reset --hard origin/main
 
 echo "🐍 Updating Python backend dependencies..."
-./venv/bin/python -m pip install -r backend/requirements.txt
+./.venv/bin/python -m pip install -r backend/requirements.txt
 
 echo "🎨 Installing frontend packages..."
 cd frontend

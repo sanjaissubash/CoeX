@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
 # Rebuild and restart frontend and backend for local development/e2e
-# - Stops processes on the known ports (3000 and 8082)
+# - Stops processes on the known ports (3000 and 5001)
 # - Builds frontend (next build)
-# - Starts backend with backend/run.py (127.0.0.1:8082)
+# - Starts backend with backend/run.py (127.0.0.1:5001)
 # - Starts frontend with `next start` (port 3000)
 # - Logs go to /tmp/frontend.log and /tmp/backend.log
 
@@ -13,7 +13,7 @@ FRONTEND_DIR="$REPO_ROOT/frontend"
 BACKEND_DIR="$REPO_ROOT/backend"
 
 FRONTEND_PORT=3000
-BACKEND_PORT=8082
+BACKEND_PORT=5001
 BACKEND_HOST=0.0.0.0
 
 FRONTEND_LOG=/tmp/frontend.log
