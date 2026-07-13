@@ -1,4 +1,4 @@
-ProductOS Functional Specification v1.0
+CoeX Functional Specification v1.0
 
 Part 1 — Foundation & Architecture Specification
 
@@ -8,7 +8,7 @@ Part 1 — Foundation & Architecture Specification
 
 Product Name
 
-ProductOS
+CoeX
 
 Product Type
 
@@ -16,7 +16,7 @@ Local-first Product Knowledge & Context Management System
 
 Primary Purpose
 
-ProductOS serves as the central operating system for managing digital products throughout their lifecycle.
+CoeX serves as the central operating system for managing digital products throughout their lifecycle.
 
 The application acts as:
 
@@ -53,11 +53,11 @@ As a result:
 * Prompts become scattered.
 * Context must be repeatedly explained.
 
-ProductOS solves this problem by becoming the permanent memory layer independent of any AI tool.
+CoeX solves this problem by becoming the permanent memory layer independent of any AI tool.
 
 AI tools become temporary workers.
 
-ProductOS becomes the permanent brain.
+CoeX becomes the permanent brain.
 
 ⸻
 
@@ -125,7 +125,7 @@ The architecture must support these in future versions.
 
 5. Core Philosophy
 
-ProductOS is Product-Centric.
+CoeX is Product-Centric.
 
 Everything revolves around Products.
 
@@ -309,7 +309,7 @@ Published □
 
 13. Product Templates
 
-ProductOS must support product templates.
+CoeX must support product templates.
 
 Templates are first-class entities.
 
@@ -339,7 +339,7 @@ Default Notes
 
 14. Storage Architecture
 
-ProductOS uses Hybrid Storage.
+CoeX uses Hybrid Storage.
 
 SQLite
 
@@ -1238,7 +1238,7 @@ Creates Activity Log Entry
 
 29. Product Detail Page
 
-This is the heart of ProductOS.
+This is the heart of CoeX.
 
 Every product has a dedicated detail page.
 
@@ -1596,7 +1596,7 @@ Keyboard Shortcut (recommended)
 
 50. MVP Success Criteria
 
-ProductOS MVP is considered successful when a user can:
+CoeX MVP is considered successful when a user can:
 
 Create Product Families
 
@@ -1634,9 +1634,9 @@ Part 3 — Knowledge System & Context Engine Specification
 
 1. Purpose
 
-This document defines the Knowledge Layer of ProductOS.
+This document defines the Knowledge Layer of CoeX.
 
-The Knowledge Layer is the most important differentiator of ProductOS.
+The Knowledge Layer is the most important differentiator of CoeX.
 
 Many applications can store products.
 
@@ -1685,7 +1685,7 @@ These entities collectively form Product Memory.
 
 3. Product Memory Philosophy
 
-ProductOS should be treated as:
+CoeX should be treated as:
 
 Permanent Memory
 
@@ -1693,7 +1693,7 @@ AI tools should be treated as:
 
 Temporary Workers
 
-All important outputs eventually return to ProductOS.
+All important outputs eventually return to CoeX.
 
 Knowledge should never remain trapped inside:
 
@@ -2595,13 +2595,13 @@ Part 4 — Technical Implementation & Engineering Specification
 
 1. Purpose
 
-This document defines the technical implementation requirements for ProductOS.
+This document defines the technical implementation requirements for CoeX.
 
 Parts 1–3 define business behavior.
 
 Part 4 defines engineering behavior.
 
-The objective is to ensure ProductOS is:
+The objective is to ensure CoeX is:
 
 * Maintainable
 * Scalable
@@ -2680,7 +2680,7 @@ Filesystem stores files.
 
 3. Architecture Principles
 
-ProductOS must follow:
+CoeX must follow:
 
 Modular Architecture
 
@@ -3382,7 +3382,7 @@ Readable contrast required.
 
 40. Performance Targets
 
-ProductOS should feel fast.
+CoeX should feel fast.
 
 Target:
 
@@ -3588,13 +3588,13 @@ Export Data
 
 Import Data
 
-Use ProductOS daily without losing product context.
+Use CoeX daily without losing product context.
 
 ⸻
 
 50. Final Engineering Directive
 
-ProductOS must be implemented as a real working system.
+CoeX must be implemented as a real working system.
 
 Not a prototype.
 
@@ -3622,7 +3622,7 @@ Part 5 — Implementation Strategy & Build Order
 
 1. Purpose
 
-This document defines the implementation sequence for ProductOS.
+This document defines the implementation sequence for CoeX.
 
 The goal is to ensure:
 
@@ -3667,7 +3667,7 @@ Every feature should be built on completed foundations.
 
 3. Development Phases
 
-ProductOS MVP implementation is divided into:
+CoeX MVP implementation is divided into:
 
 Phase 1:
 Core Infrastructure
@@ -3757,7 +3757,7 @@ Storage directories created automatically.
 
 Goal:
 
-Create ProductOS foundation entities.
+Create CoeX foundation entities.
 
 ⸻
 
@@ -4117,7 +4117,7 @@ UI Polish
 
 31. Phase 5 Completion Criteria
 
-User can search entire ProductOS.
+User can search entire CoeX.
 
 Search returns categorized results.
 
@@ -4391,7 +4391,7 @@ Reliability
 
 Do not sacrifice architecture quality for speed.
 
-ProductOS must be built as a long-term foundation capable of supporting future:
+CoeX must be built as a long-term foundation capable of supporting future:
 
 Ollama Integration
 

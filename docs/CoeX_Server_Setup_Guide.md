@@ -1,12 +1,12 @@
-# ProductOS Server Setup and Rebuild Guide
+# CoeX Server Setup and Rebuild Guide
 
-This guide explains how to install the current ProductOS app on a fresh server after cloning the repository.
+This guide explains how to install the current CoeX app on a fresh server after cloning the repository.
 
 It is based on the current app structure:
 
 - Backend: Flask app in `backend/`
 - Frontend: Next.js app in `frontend/`
-- Database: SQLite at `storage/productos.db`
+- Database: SQLite at `storage/coex.db`
 - Uploaded files/assets: `storage/products`, `storage/families`, `storage/uploads`
 - Backend port: `8082`
 - Frontend port: `3000`
@@ -52,10 +52,10 @@ npm -v
 Example deploy path:
 
 ```bash
-sudo mkdir -p /var/www/productos
-sudo chown "$USER":"$USER" /var/www/productos
-git clone <your-repo-url> /var/www/productos
-cd /var/www/productos
+sudo mkdir -p /var/www/coex
+sudo chown "$USER":"$USER" /var/www/coex
+git clone <your-repo-url> /var/www/coex
+cd /var/www/coex
 ```
 
 Create storage folders:
@@ -164,7 +164,7 @@ chmod +x server_setup.sh
 Use this process after pulling new code:
 
 ```bash
-cd /var/www/productos
+cd /var/www/coex
 git pull
 
 ./venv/bin/python -m pip install -r backend/requirements.txt
@@ -174,8 +174,8 @@ npm ci
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8082/api npm run build
 cd ..
 
-sudo systemctl restart productos-backend
-sudo systemctl restart productos-frontend
+sudo systemctl restart coex-backend
+sudo systemctl restart coex-frontend
 ```
 
 If you are not using `systemd`, stop the old processes and restart manually:
@@ -194,20 +194,20 @@ PORT=3000 NEXT_PUBLIC_API_URL=http://127.0.0.1:8082/api npm run start
 Create backend service:
 
 ```bash
-sudo nano /etc/systemd/system/productos-backend.service
+sudo nano /etc/systemd/system/coex-backend.service
 ```
 
 Paste:
 
 ```ini
 [Unit]
-Description=ProductOS Backend
+Description=CoeX Backend
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/var/www/productos
-ExecStart=/var/www/productos/venv/bin/python -m backend.run --host 0.0.0.0 --port 8082
+WorkingDirectory=/var/www/coex
+ExecStart=/var/www/coex/venv/bin/python -m backend.run --host 0.0.0.0 --port 8082
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
@@ -219,19 +219,19 @@ WantedBy=multi-user.target
 Create frontend service:
 
 ```bash
-sudo nano /etc/systemd/system/productos-frontend.service
+sudo nano /etc/systemd/system/coex-frontend.service
 ```
 
 Paste:
 
 ```ini
 [Unit]
-Description=ProductOS Frontend
-After=network.target productos-backend.service
+Description=CoeX Frontend
+After=network.target coex-backend.service
 
 [Service]
 Type=simple
-WorkingDirectory=/var/www/productos/frontend
+WorkingDirectory=/var/www/coex/frontend
 ExecStart=/usr/bin/npm run start
 Restart=always
 RestartSec=5
@@ -246,22 +246,22 @@ Enable and start:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable productos-backend productos-frontend
-sudo systemctl start productos-backend productos-frontend
+sudo systemctl enable coex-backend coex-frontend
+sudo systemctl start coex-backend coex-frontend
 ```
 
 Check status:
 
 ```bash
-sudo systemctl status productos-backend
-sudo systemctl status productos-frontend
+sudo systemctl status coex-backend
+sudo systemctl status coex-frontend
 ```
 
 View logs:
 
 ```bash
-sudo journalctl -u productos-backend -n 200 -f
-sudo journalctl -u productos-frontend -n 200 -f
+sudo journalctl -u coex-backend -n 200 -f
+sudo journalctl -u coex-frontend -n 200 -f
 ```
 
 ## Nginx Reverse Proxy
@@ -305,8 +305,8 @@ server {
 Enable it:
 
 ```bash
-sudo nano /etc/nginx/sites-available/productos.conf
-sudo ln -s /etc/nginx/sites-available/productos.conf /etc/nginx/sites-enabled/productos.conf
+sudo nano /etc/nginx/sites-available/coex.conf
+sudo ln -s /etc/nginx/sites-available/coex.conf /etc/nginx/sites-enabled/coex.conf
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -321,12 +321,12 @@ sudo certbot --nginx -d your-domain.com
 After switching to a public domain, rebuild frontend:
 
 ```bash
-cd /var/www/productos/frontend
+cd /var/www/coex/frontend
 NEXT_PUBLIC_API_URL=https://your-domain.com/api npm run build
-sudo systemctl restart productos-frontend
+sudo systemctl restart coex-frontend
 ```
 
-Also update `/etc/systemd/system/productos-frontend.service`:
+Also update `/etc/systemd/system/coex-frontend.service`:
 
 ```ini
 Environment=NEXT_PUBLIC_API_URL=https://your-domain.com/api
@@ -336,7 +336,7 @@ Then reload:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart productos-frontend
+sudo systemctl restart coex-frontend
 ```
 
 ## Database and Storage
@@ -344,7 +344,7 @@ sudo systemctl restart productos-frontend
 Current active data:
 
 ```text
-storage/productos.db
+storage/coex.db
 storage/products/
 storage/families/
 storage/uploads/
@@ -355,30 +355,30 @@ The backend creates tables automatically. No manual migration command is current
 Back up data:
 
 ```bash
-cd /var/www/productos
+cd /var/www/coex
 mkdir -p storage/exports
-tar -czf storage/exports/productos-backup-$(date +%Y%m%d-%H%M%S).tar.gz storage/productos.db storage/products storage/families storage/uploads
+tar -czf storage/exports/coex-backup-$(date +%Y%m%d-%H%M%S).tar.gz storage/coex.db storage/products storage/families storage/uploads
 ```
 
 Restore from backup:
 
 ```bash
-cd /var/www/productos
-sudo systemctl stop productos-backend productos-frontend
-tar -xzf storage/exports/productos-backup-YYYYMMDD-HHMMSS.tar.gz
-sudo systemctl start productos-backend productos-frontend
+cd /var/www/coex
+sudo systemctl stop coex-backend coex-frontend
+tar -xzf storage/exports/coex-backup-YYYYMMDD-HHMMSS.tar.gz
+sudo systemctl start coex-backend coex-frontend
 ```
 
 Reset to a fresh empty app:
 
 ```bash
-cd /var/www/productos
-sudo systemctl stop productos-backend productos-frontend
-rm -f storage/productos.db storage/productos.db-shm storage/productos.db-wal
+cd /var/www/coex
+sudo systemctl stop coex-backend coex-frontend
+rm -f storage/coex.db storage/coex.db-shm storage/coex.db-wal
 find storage/products -mindepth 1 -exec rm -rf {} +
 find storage/families -mindepth 1 -exec rm -rf {} +
 find storage/uploads -mindepth 1 -exec rm -rf {} +
-sudo systemctl start productos-backend productos-frontend
+sudo systemctl start coex-backend coex-frontend
 ```
 
 ## Smoke Checks
@@ -434,27 +434,27 @@ lsof -ti tcp:8082 | xargs -r kill
 Frontend still calls the wrong API:
 
 - Rebuild the frontend with the correct `NEXT_PUBLIC_API_URL`.
-- Check browser localStorage for `productos_api_url`; the app can override the env value from localStorage.
+- Check browser localStorage for `coex_api_url`; the app can override the env value from localStorage.
 
 Backend cannot write files:
 
 ```bash
-sudo chown -R www-data:www-data /var/www/productos/storage /var/www/productos/logs
-sudo chmod -R u+rwX /var/www/productos/storage /var/www/productos/logs
+sudo chown -R www-data:www-data /var/www/coex/storage /var/www/coex/logs
+sudo chmod -R u+rwX /var/www/coex/storage /var/www/coex/logs
 ```
 
 If running as a non-`www-data` deploy user, use that user instead.
 
 SQLite database locked:
 
-- Make sure only one backend process writes to `storage/productos.db`.
+- Make sure only one backend process writes to `storage/coex.db`.
 - Stop duplicate backend processes.
-- Restart `productos-backend`.
+- Restart `coex-backend`.
 
 Frontend build fails:
 
 ```bash
-cd /var/www/productos/frontend
+cd /var/www/coex/frontend
 rm -rf .next node_modules
 npm ci
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8082/api npm run build
@@ -463,7 +463,7 @@ NEXT_PUBLIC_API_URL=http://127.0.0.1:8082/api npm run build
 Backend dependency issue:
 
 ```bash
-cd /var/www/productos
+cd /var/www/coex
 ./venv/bin/python -m pip install --upgrade pip setuptools wheel
 ./venv/bin/python -m pip install -r backend/requirements.txt
 ./venv/bin/python -m compileall backend
@@ -471,7 +471,7 @@ cd /var/www/productos
 
 ## Recommended Deployment Checklist
 
-1. Clone repo to `/var/www/productos`.
+1. Clone repo to `/var/www/coex`.
 2. Install Python and Node dependencies.
 3. Create `storage/` folders.
 4. Build frontend with the correct `NEXT_PUBLIC_API_URL`.
@@ -480,5 +480,5 @@ cd /var/www/productos
 7. Add systemd services.
 8. Add nginx reverse proxy.
 9. Add HTTPS with Certbot.
-10. Set up regular backups for `storage/productos.db` and uploaded files.
+10. Set up regular backups for `storage/coex.db` and uploaded files.
 
