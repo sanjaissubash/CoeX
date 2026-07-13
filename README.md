@@ -66,3 +66,39 @@ bash start.sh
 - **Frontend Interface**: [http://localhost:3000](http://localhost:3000)
 - **Backend API URL**: [http://localhost:5001/api](http://localhost:5001/api)
 - **Backend API Ping**: [http://localhost:5001/api/ping](http://localhost:5001/api/ping)
+
+---
+
+## 🚀 Final Command Summary
+
+### Local macOS development
+```bash
+git clone <repo-url> CoeX
+cd CoeX
+./setup.sh
+bash start.sh
+```
+
+### Ubuntu server production
+```bash
+git clone <repo-url> CoeX
+cd CoeX
+./setup.sh
+```
+
+Then use systemd service controls:
+```bash
+sudo systemctl status coex-backend.service coex-frontend.service
+sudo systemctl restart coex-backend.service coex-frontend.service
+```
+
+### Deployment updates on Ubuntu
+```bash
+cd /var/www/coex
+sudo ./scripts/deploy.sh
+```
+
+### Useful local helpers
+- `bash start.sh` — start frontend + backend together for local development
+- `./scripts/rebuild_and_restart.sh` — rebuild and restart local frontend/backend with logs
+- `./scripts/start-backend.sh --port 8082` — run backend only on a custom port
