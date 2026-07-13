@@ -1,36 +1,49 @@
 # CoeX — Local-First AI Context & Memory Engine
 
-CoeX is a local-first Product Knowledge & Context Management system. It serves as a permanent memory layer for digital products, keeping your data secure, isolated, and model-agnostic.
-
-## Key Features
-
-- **Local-First Storage**: 100% data privacy. All metadata is stored locally in SQLite (`storage/productos.db`) and user assets are saved directly to local folders.
-- **AI Context Generator**: Compiles description, context blocks, tasks, decisions, sessions, and files into a single, copyable text packet to bootstrap new AI chats in seconds.
-- **Context Leak Checker**: Scans generated context packages for sensitive tokens (API keys, secret keys, emails) and custom keywords before you share them with third-party cloud AIs.
-- **Decision & Session Logs**: Keep a permanent record of technical pivots, rationale, alternatives considered, and AI work session outcomes.
+CoeX is a local-first Project Knowledge & Context Management system. It serves as a permanent memory layer for projects based on cloud infrastructure and architecture, keeping your data secure, isolated, model-agnostic, and optimized for AI-assisted development.
 
 ---
 
-## Folder Structure
+## 🌟 Key Features
 
-- `backend/`: Python/Flask server managing APIs and database storage.
-- `frontend/`: Next.js 14 (App Router) frontend interface.
-- `storage/`: Local data root for SQLite databases and user assets.
+### 1. AI Context Generator
+- Combines your project specifications, parsed cloud architectures, and guidelines into clean prompt templates.
+- **Task Context Linkage**: Optionally link prompts directly to active project tasks to automatically inject title, description, priority, and status constraints.
+
+### 2. Integrated Safety Leak Checker
+- Automatically scans generated prompt packages for sensitive patterns (API keys, secret keys, emails) and custom global leak keywords.
+- Manage custom leak keywords directly inside the consolidated **Settings** page.
+
+### 3. Inline Infrastructure Config Uploader
+- Choose cloud provider environment context (AWS, GCP, Azure).
+- Upload and parse Terraform State files, Draw.io XML schemas, or Visio VSDX diagrams inline directly inside a project's Architecture tab to sync architecture overviews and security recommendation blocks.
+
+### 4. Unified Decision & Task Logs
+- Log architectural pivots, alternatives considered, and task milestones within each project.
+- Synchronization rules ensure deleting notes deletes them instantly from both the workspace and project views.
 
 ---
 
-## Local Development Setup
+## 📁 Folder Structure
+
+- `backend/`: Python/Flask server managing APIs, database schemas, and file parsing.
+- `frontend/`: Next.js 14 (App Router) interface styled with modern custom theme colors (`#49769F` brand blue).
+- `storage/`: Local storage folder containing the SQLite database and parsed uploads.
+
+---
+
+## ⚙️ Local Development Setup
 
 ### 1. Requirements
 - Python 3.11 or newer (Python 3.12 recommended)
 - Node.js 20 LTS
 
-### 2. Configure Environments
+### 2. Configure Environment Files
 Create backend config in `backend/.env`:
 ```text
 FLASK_ENV=development
 FLASK_APP=backend/main.py
-SQLALCHEMY_DATABASE_URI=sqlite:///storage/productos.db
+SQLALCHEMY_DATABASE_URI=sqlite:///storage/coex.db
 ```
 
 Create frontend config in `frontend/.env.local`:
@@ -39,21 +52,17 @@ NEXT_PUBLIC_API_URL=http://localhost:5001/api
 PORT=3000
 ```
 
-### 3. Install Dependencies
-Run the setup script to initialize environments and dependencies:
+### 3. Install Dependencies & Launch
+Run the setup script to initialize virtual environments and dependencies:
 ```bash
 ./setup.sh
 ```
 
----
-
-## How to Run
-
-Use the included helper script to start both services concurrently:
+Start backend and frontend servers concurrently:
 ```bash
 bash start.sh
 ```
 
-- **Frontend**: [http://localhost:3000](http://localhost:3000)
-- **Backend API**: [http://localhost:5001/api](http://localhost:5001/api)
-- **Backend Ping**: [http://localhost:5001/api/ping](http://localhost:5001/api/ping)
+- **Frontend Interface**: [http://localhost:3000](http://localhost:3000)
+- **Backend API URL**: [http://localhost:5001/api](http://localhost:5001/api)
+- **Backend API Ping**: [http://localhost:5001/api/ping](http://localhost:5001/api/ping)

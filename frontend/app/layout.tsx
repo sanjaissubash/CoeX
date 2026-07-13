@@ -8,7 +8,7 @@ import "@/app/globals.css"
 
 export const metadata: Metadata = {
   title: "CoeX",
-  description: "Product Knowledge & Context Management System",
+  description: "Project Knowledge & Context Management System",
 }
 
 export default function RootLayout({

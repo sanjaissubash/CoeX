@@ -65,7 +65,7 @@ export default function FamiliesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Families</h1>
-          <p className="text-muted-foreground">Organize your products into families</p>
+          <p className="text-muted-foreground">Organize your projects into families</p>
         </div>
         <button
           onClick={() => setShowNewFamilyForm(true)}
@@ -124,7 +124,7 @@ export default function FamiliesPage() {
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <h3 className="text-lg font-bold">{family.name}</h3>
-                  <p className="text-sm text-muted-foreground">{family.product_count} products</p>
+                  <p className="text-sm text-muted-foreground">{family.project_count} projects</p>
                 </div>
                 <div className="flex gap-2">
                   <button

@@ -1,4 +1,4 @@
-export const CUSTOM_KEYWORDS_STORAGE_KEY = "productos_context_leak_keywords"
+export const CUSTOM_KEYWORDS_STORAGE_KEY = "projectos_context_leak_keywords"
 
 export function normalizeLeakKeywords(items: unknown) {
   if (!Array.isArray(items)) return []

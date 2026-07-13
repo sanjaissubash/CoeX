@@ -6,7 +6,7 @@ class ContextBlock(db.Model):
     __tablename__ = "context_blocks"
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    product_id = db.Column(db.String(36), db.ForeignKey("products.id"), nullable=False)
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id"), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     content = db.Column(db.Text, nullable=False)
     block_type = db.Column(db.String(50))
@@ -18,7 +18,7 @@ class ContextBlock(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "product_id": self.product_id,
+            "project_id": self.project_id,
             "title": self.title,
             "content": self.content,
             "block_type": self.block_type,

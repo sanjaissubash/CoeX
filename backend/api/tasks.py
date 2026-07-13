@@ -4,7 +4,7 @@ from flask import jsonify, request
 
 from backend.api import api_bp
 from backend.database import db
-from backend.models import Product, Task
+from backend.models import Project, Task
 from backend.services.activity_service import ActivityService
 
 
@@ -17,27 +17,27 @@ def _parse_due_date(value):
         return None
 
 
-@api_bp.route("/products/<product_id>/tasks", methods=["GET"])
-def list_product_tasks(product_id):
-    Product.query.get_or_404(product_id)
+@api_bp.route("/projects/<project_id>/tasks", methods=["GET"])
+def list_project_tasks(project_id):
+    Project.query.get_or_404(project_id)
     status = request.args.get("status")
-    query = Task.query.filter_by(product_id=product_id)
+    query = Task.query.filter_by(project_id=project_id)
     if status:
         query = query.filter_by(status=status)
     tasks = query.order_by(Task.sort_order.asc(), Task.created_at.desc()).all()
     return jsonify({"success": True, "data": [t.to_dict() for t in tasks]})
 
 
-@api_bp.route("/products/<product_id>/tasks", methods=["POST"])
-def create_product_task(product_id):
-    Product.query.get_or_404(product_id)
+@api_bp.route("/projects/<project_id>/tasks", methods=["POST"])
+def create_project_task(project_id):
+    Project.query.get_or_404(project_id)
     body = request.get_json(silent=True) or {}
     title = (body.get("title") or "").strip()
     if not title:
         return jsonify({"success": False, "error": "title required"}), 400
 
     task = Task(
-        product_id=product_id,
+        project_id=project_id,
         title=title,
         description=body.get("description"),
         priority=body.get("priority", "medium"),
@@ -49,7 +49,7 @@ def create_product_task(product_id):
     db.session.commit()
 
     ActivityService.log_action(
-        product_id=product_id,
+        project_id=project_id,
         action="CREATED",
         entity_type="Task",
         entity_id=task.id,
@@ -89,7 +89,7 @@ def update_task(task_id):
     db.session.commit()
 
     ActivityService.log_action(
-        product_id=task.product_id,
+        project_id=task.project_id,
         action="UPDATED",
         entity_type="Task",
         entity_id=task.id,
@@ -103,12 +103,12 @@ def delete_task(task_id):
     task = Task.query.get(task_id)
     if not task:
         return jsonify({"success": False, "error": "not found"}), 404
-    product_id = task.product_id
+    project_id = task.project_id
     db.session.delete(task)
     db.session.commit()
 
     ActivityService.log_action(
-        product_id=product_id,
+        project_id=project_id,
         action="DELETED",
         entity_type="Task",
         entity_id=task_id,

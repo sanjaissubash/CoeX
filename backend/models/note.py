@@ -6,7 +6,7 @@ class Note(db.Model):
     __tablename__ = "notes"
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    product_id = db.Column(db.String(36), db.ForeignKey("products.id"))
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id"))
     note_type = db.Column(db.String(50), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     content = db.Column(db.Text, nullable=False)
@@ -18,7 +18,7 @@ class Note(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "product_id": self.product_id,
+            "project_id": self.project_id,
             "note_type": self.note_type,
             "title": self.title,
             "content": self.content,

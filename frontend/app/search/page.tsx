@@ -42,7 +42,7 @@ export default function SearchPage() {
     <div className="space-y-8 p-8">
       <div>
         <h1 className="text-3xl font-bold">Search</h1>
-        <p className="text-muted-foreground">Find products, notes, prompts, decisions, research, and sessions</p>
+        <p className="text-muted-foreground">Find projects, notes, prompts, decisions, research, and sessions</p>
       </div>
 
       <div className="relative">
@@ -62,7 +62,7 @@ export default function SearchPage() {
         ) : query.trim() && results.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground">No results found</div>
         ) : !query.trim() ? (
-          <div className="p-6 text-sm text-muted-foreground">Start typing to search your local product memory</div>
+          <div className="p-6 text-sm text-muted-foreground">Start typing to search your local project memory</div>
         ) : (
           <div className="divide-y divide-border">
             {results.map((result) => (

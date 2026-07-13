@@ -6,7 +6,7 @@ from backend.models import (
     Decision,
     Family,
     Note,
-    Product,
+    Project,
     Prompt,
     Research,
     Session,
@@ -26,14 +26,14 @@ def search():
 
     results = []
 
-    for product in Product.query.order_by(Product.updated_at.desc()).all():
-        if _matches(q, product.name, product.description, product.lifecycle, product.status):
+    for project in Project.query.order_by(Project.updated_at.desc()).all():
+        if _matches(q, project.name, project.description, project.lifecycle, project.status):
             results.append({
-                "type": "product",
-                "id": product.id,
-                "title": product.name,
-                "subtitle": product.description,
-                "href": f"/products/{product.id}",
+                "type": "project",
+                "id": project.id,
+                "title": project.name,
+                "subtitle": project.description,
+                "href": f"/projects/{project.id}",
             })
 
     for family in Family.query.order_by(Family.updated_at.desc()).all():
@@ -53,7 +53,7 @@ def search():
                 "id": note.id,
                 "title": note.title,
                 "subtitle": note.content,
-                "href": f"/products/{note.product_id}" if note.product_id else "/notes",
+                "href": f"/projects/{note.project_id}" if note.project_id else "/notes",
             })
 
     for prompt in Prompt.query.order_by(Prompt.updated_at.desc()).all():
@@ -63,7 +63,7 @@ def search():
                 "id": prompt.id,
                 "title": prompt.name,
                 "subtitle": prompt.prompt_text,
-                "href": f"/products/{prompt.product_id}" if prompt.product_id else "/search",
+                "href": f"/projects/{prompt.project_id}" if prompt.project_id else "/search",
             })
 
     for research in Research.query.order_by(Research.updated_at.desc()).all():
@@ -73,7 +73,7 @@ def search():
                 "id": research.id,
                 "title": research.title,
                 "subtitle": research.notes or research.content,
-                "href": f"/products/{research.product_id}",
+                "href": f"/projects/{research.project_id}",
             })
 
     for decision in Decision.query.order_by(Decision.updated_at.desc()).all():
@@ -83,7 +83,7 @@ def search():
                 "id": decision.id,
                 "title": decision.title,
                 "subtitle": decision.description,
-                "href": f"/products/{decision.product_id}",
+                "href": f"/projects/{decision.project_id}",
             })
 
     for session in Session.query.order_by(Session.updated_at.desc()).all():
@@ -93,7 +93,7 @@ def search():
                 "id": session.id,
                 "title": session.goal,
                 "subtitle": session.summary,
-                "href": f"/products/{session.product_id}",
+                "href": f"/projects/{session.project_id}",
             })
 
     for block in ContextBlock.query.order_by(ContextBlock.updated_at.desc()).all():
@@ -103,7 +103,7 @@ def search():
                 "id": block.id,
                 "title": block.title,
                 "subtitle": block.content,
-                "href": f"/products/{block.product_id}",
+                "href": f"/projects/{block.project_id}",
             })
 
     return jsonify({"success": True, "data": results[:100]})

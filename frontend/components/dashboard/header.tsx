@@ -17,7 +17,7 @@ export function DashboardHeader() {
 					Search
 				</Link>
 				<Link
-					href="/products/create"
+					href="/projects/create"
 					className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-accent-foreground hover:opacity-90 transition-opacity"
 				>
 					<Plus className="h-4 w-4" />

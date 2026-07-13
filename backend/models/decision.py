@@ -6,7 +6,7 @@ class Decision(db.Model):
     __tablename__ = "decisions"
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    product_id = db.Column(db.String(36), db.ForeignKey("products.id"), nullable=False)
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id"), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=False)
     rationale = db.Column(db.Text)
@@ -22,7 +22,7 @@ class Decision(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "product_id": self.product_id,
+            "project_id": self.project_id,
             "title": self.title,
             "description": self.description,
             "rationale": self.rationale,

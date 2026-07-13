@@ -1,13 +1,13 @@
 from flask import jsonify
 from backend.api import api_bp
-from backend.models import ProductTemplate
+from backend.models import ProjectTemplate
 from backend.services.template_service import TemplateService
 
 @api_bp.route("/templates", methods=["GET"])
 def get_templates():
-    """Get all product templates."""
+    """Get all project templates."""
     TemplateService.get_or_create_default_templates()
-    templates = ProductTemplate.query.all()
+    templates = ProjectTemplate.query.all()
     return jsonify({
         "success": True,
         "data": [t.to_dict() for t in templates],
@@ -17,7 +17,7 @@ def get_templates():
 @api_bp.route("/templates/<template_id>", methods=["GET"])
 def get_template(template_id):
     """Get single template."""
-    template = ProductTemplate.query.get(template_id)
+    template = ProjectTemplate.query.get(template_id)
     if not template:
         return jsonify({
             "success": False,

@@ -1,6 +1,6 @@
 """Context generator endpoint.
 
-Aggregates product overview, context blocks, open tasks, active milestones,
+Aggregates project overview, context blocks, open tasks, active milestones,
 recent decisions, recent sessions, research highlights, and assets into a
 concise JSON structure and a compact text package suitable for AI context.
 
@@ -8,7 +8,7 @@ Deterministic. No AI models used.
 """
 from flask import request, jsonify
 from backend.api import api_bp
-from backend.models import Asset, Product, ContextBlock, Task, Milestone, Decision, Session, Research
+from backend.models import Asset, Project, ContextBlock, Task, Milestone, Decision, Session, Research
 from backend.database import db
 from datetime import datetime
 from flask import current_app
@@ -25,11 +25,11 @@ def _summarize_recent(items, limit=5, title_key="title", summary_keys=None):
     return out
 
 
-def _build_asset_tree(assets, product_id):
+def _build_asset_tree(assets, project_id):
     tree = {}
     for asset in assets:
         parts = [part for part in asset["file_path"].split("/") if part]
-        if len(parts) >= 2 and parts[0] == "products" and parts[1] == product_id:
+        if len(parts) >= 2 and parts[0] == "projects" and parts[1] == project_id:
             parts = parts[2:]
         node = tree
         for folder in parts[:-1]:
@@ -51,38 +51,38 @@ def _build_asset_tree(assets, product_id):
     return "\n".join(render(tree)) if tree else ""
 
 
-@api_bp.route("/products/<product_id>/context", methods=["GET"])
-def generate_product_context(product_id):
+@api_bp.route("/projects/<project_id>/context", methods=["GET"])
+def generate_project_context(project_id):
     try:
-        product = Product.query.get(product_id)
-        if not product:
-            return jsonify({"success": False, "error": "product_not_found"}), 404
+        project = Project.query.get(project_id)
+        if not project:
+            return jsonify({"success": False, "error": "project_not_found"}), 404
 
         # Overview
         overview = {
-            "id": product.id,
-            "name": product.name,
-            "description": product.description,
-            "lifecycle": product.lifecycle,
-            "status": product.status,
-            "health_score": product.health_score,
+            "id": project.id,
+            "name": project.name,
+            "description": project.description,
+            "lifecycle": project.lifecycle,
+            "status": project.status,
+            "health_score": project.health_score,
         }
 
-        # Context Blocks (all for product). Note: ContextBlock model doesn't
+        # Context Blocks (all for project). Note: ContextBlock model doesn't
         # have a 'status' column in this schema, so don't filter by status.
-        cblocks = ContextBlock.query.filter_by(product_id=product.id).order_by(ContextBlock.created_at.desc()).all()
+        cblocks = ContextBlock.query.filter_by(project_id=project.id).order_by(ContextBlock.created_at.desc()).all()
         context_blocks = [
             {"id": cb.id, "title": cb.title, "content": cb.content, "priority": cb.priority}
             for cb in cblocks
         ]
 
         # Open tasks - filter by status not equal to 'done'
-        tasks = Task.query.filter_by(product_id=product.id).filter(Task.status != 'done').order_by(Task.due_date.asc()).all()
+        tasks = Task.query.filter_by(project_id=project.id).filter(Task.status != 'done').order_by(Task.due_date.asc()).all()
         open_tasks = [{"id": t.id, "title": t.title, "due_date": t.due_date.isoformat() if t.due_date else None} for t in tasks]
 
         # Active milestones (Milestone model doesn't define due_date in this
         # schema, order by created_at instead)
-        milestones = Milestone.query.filter_by(product_id=product.id).order_by(Milestone.created_at.desc()).all()
+        milestones = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.created_at.desc()).all()
         # Milestone uses 'name' for title and 'completed_at' for completion
         active_milestones = [{
             "id": m.id,
@@ -92,19 +92,19 @@ def generate_product_context(product_id):
         } for m in milestones]
 
         # Recent decisions
-        decisions = Decision.query.filter_by(product_id=product.id).order_by(Decision.created_at.desc()).all()
+        decisions = Decision.query.filter_by(project_id=project.id).order_by(Decision.created_at.desc()).all()
         # Decision model uses 'title' as the title field
         recent_decisions = _summarize_recent(decisions, limit=5, title_key="title")
 
         # Recent sessions
-        sessions = Session.query.filter_by(product_id=product.id).order_by(Session.session_date.desc()).all()
+        sessions = Session.query.filter_by(project_id=project.id).order_by(Session.session_date.desc()).all()
         recent_sessions = _summarize_recent(sessions, limit=5, title_key="goal", summary_keys=["summary"])
 
         # Research highlights (titles)
-        research = Research.query.filter_by(product_id=product.id).order_by(Research.created_at.desc()).all()
+        research = Research.query.filter_by(project_id=project.id).order_by(Research.created_at.desc()).all()
         research_highlights = _summarize_recent(research, limit=5, title_key="title", summary_keys=["notes"])
 
-        assets_query = Asset.query.filter_by(product_id=product.id).order_by(Asset.created_at.desc()).all()
+        assets_query = Asset.query.filter_by(project_id=project.id).order_by(Asset.created_at.desc()).all()
         assets = [
             {
                 "id": asset.id,
@@ -115,30 +115,30 @@ def generate_product_context(product_id):
             }
             for asset in assets_query
         ]
-        asset_tree = _build_asset_tree(assets, product.id)
+        asset_tree = _build_asset_tree(assets, project.id)
 
-        # Build a paste-ready prompt for continuing product work in a new AI chat.
+        # Build a paste-ready prompt for continuing project work in a new AI chat.
         parts = [
-            "You are helping me continue work on this product in a new AI chat.",
+            "You are helping me continue work on this project in a new AI chat.",
             "",
-            "Use the context below as the source of truth. First understand the product, then help with planning, implementation, troubleshooting, writing, or next steps. If information is missing, ask focused questions before assuming.",
+            "Use the context below as the source of truth. First understand the project, then help with planning, implementation, troubleshooting, writing, or next steps. If information is missing, ask focused questions before assuming.",
             "",
-            "# Product Context",
-            f"Product: {product.name}",
+            "# Project Context",
+            f"Project: {project.name}",
         ]
-        if product.description:
-            parts.append(f"Purpose/Description: {product.description}")
-        parts.append(f"Lifecycle: {product.lifecycle} | Status: {product.status} | Health: {product.health_score}")
+        if project.description:
+            parts.append(f"Purpose/Description: {project.description}")
+        parts.append(f"Lifecycle: {project.lifecycle} | Status: {project.status} | Health: {project.health_score}")
 
         parts.extend([
             "",
             "# What To Preserve",
-            "- Decisions, context blocks, task state, and assets below are existing product memory.",
-            "- Keep any recommendations practical and tied to this product.",
+            "- Decisions, context blocks, task state, and assets below are existing project memory.",
+            "- Keep any recommendations practical and tied to this project.",
         ])
 
         if context_blocks:
-            parts.append("\n# Product Knowledge")
+            parts.append("\n# Project Knowledge")
             for cb in context_blocks[:10]:
                 parts.append(f"- {cb['title']}: {cb['content']}")
 
@@ -197,7 +197,7 @@ def generate_product_context(product_id):
         return jsonify(payload)
     except Exception:
         # Log full traceback to the application logger for easier debugging
-        current_app.logger.exception("Error generating context for product %s", product_id)
+        current_app.logger.exception("Error generating context for project %s", project_id)
         db.session.rollback()
         return jsonify({"success": False, "error": "internal", "message": "see server logs"}), 500
 
@@ -209,20 +209,20 @@ def generate_task_context(task_id):
         if not task:
             return jsonify({"success": False, "error": "task_not_found"}), 404
 
-        product = Product.query.get(task.product_id)
-        if not product:
-            return jsonify({"success": False, "error": "product_not_found"}), 404
+        project = Project.query.get(task.project_id)
+        if not project:
+            return jsonify({"success": False, "error": "project_not_found"}), 404
 
-        cblocks = ContextBlock.query.filter_by(product_id=product.id).order_by(ContextBlock.created_at.desc()).all()
+        cblocks = ContextBlock.query.filter_by(project_id=project.id).order_by(ContextBlock.created_at.desc()).all()
         sibling_tasks = (
-            Task.query.filter_by(product_id=product.id)
+            Task.query.filter_by(project_id=project.id)
             .filter(Task.id != task.id)
             .order_by(Task.sort_order.asc(), Task.created_at.desc())
             .all()
         )
-        decisions = Decision.query.filter_by(product_id=product.id).order_by(Decision.created_at.desc()).limit(5).all()
-        research = Research.query.filter_by(product_id=product.id).order_by(Research.created_at.desc()).limit(5).all()
-        assets_query = Asset.query.filter_by(product_id=product.id).order_by(Asset.created_at.desc()).all()
+        decisions = Decision.query.filter_by(project_id=project.id).order_by(Decision.created_at.desc()).limit(5).all()
+        research = Research.query.filter_by(project_id=project.id).order_by(Research.created_at.desc()).limit(5).all()
+        assets_query = Asset.query.filter_by(project_id=project.id).order_by(Asset.created_at.desc()).all()
         assets = [
             {
                 "id": asset.id,
@@ -233,12 +233,12 @@ def generate_task_context(task_id):
             }
             for asset in assets_query
         ]
-        asset_tree = _build_asset_tree(assets, product.id)
+        asset_tree = _build_asset_tree(assets, project.id)
 
         parts = [
-            "You are helping me continue a specific task for this product in a new AI chat.",
+            "You are helping me continue a specific task for this project in a new AI chat.",
             "",
-            "Use the task as the main objective. Use the product context only to keep decisions, assets, and constraints aligned. If the next step is unclear, propose the next practical action.",
+            "Use the task as the main objective. Use the project context only to keep decisions, assets, and constraints aligned. If the next step is unclear, propose the next practical action.",
             "",
             "# Current Task",
             f"Title: {task.title}",
@@ -251,23 +251,23 @@ def generate_task_context(task_id):
             "",
             "# Task Operating Instructions",
             "- Focus on completing or unblocking this task.",
-            "- Keep recommendations aligned with the product context below.",
+            "- Keep recommendations aligned with the project context below.",
             "- If there are risks, dependencies, or missing inputs, call them out clearly.",
             "",
-            "# Product Context",
-            f"Product: {product.name}",
+            "# Project Context",
+            f"Project: {project.name}",
         ])
-        if product.description:
-            parts.append(f"Purpose/Description: {product.description}")
-        parts.append(f"Lifecycle: {product.lifecycle} | Status: {product.status} | Health: {product.health_score}")
+        if project.description:
+            parts.append(f"Purpose/Description: {project.description}")
+        parts.append(f"Lifecycle: {project.lifecycle} | Status: {project.status} | Health: {project.health_score}")
 
         if cblocks:
-            parts.append("\n# Product Knowledge")
+            parts.append("\n# Project Knowledge")
             for cb in cblocks[:10]:
                 parts.append(f"- {cb.title}: {cb.content}")
 
         if sibling_tasks:
-            parts.append("\n# Related Product Tasks")
+            parts.append("\n# Related Project Tasks")
             for sibling in sibling_tasks[:12]:
                 parts.append(f"- [{sibling.status}] {sibling.title} (priority: {sibling.priority})")
 
@@ -297,12 +297,12 @@ def generate_task_context(task_id):
             "success": True,
             "data": {
                 "task": task.to_dict(),
-                "product": {
-                    "id": product.id,
-                    "name": product.name,
-                    "description": product.description,
-                    "lifecycle": product.lifecycle,
-                    "status": product.status,
+                "project": {
+                    "id": project.id,
+                    "name": project.name,
+                    "description": project.description,
+                    "lifecycle": project.lifecycle,
+                    "status": project.status,
                 },
                 "asset_tree": asset_tree,
                 "compact_text": compact_text,

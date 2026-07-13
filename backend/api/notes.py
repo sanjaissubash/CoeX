@@ -16,7 +16,7 @@ def create_note():
         }), 400
     
     note = Note(
-        product_id=data.get("product_id"),
+        project_id=data.get("project_id"),
         note_type=data["note_type"],
         title=data["title"],
         content=data.get("content", ""),
@@ -59,6 +59,10 @@ def update_note(note_id):
     note.content = data.get("content", note.content)
     note.tags = data.get("tags", note.tags)
     note.pinned = data.get("pinned", note.pinned)
+    if "project_id" in data:
+        note.project_id = data["project_id"]
+    if "note_type" in data:
+        note.note_type = data["note_type"]
     
     db.session.commit()
     
@@ -82,15 +86,17 @@ def delete_note(note_id):
 
 @api_bp.route("/notes", methods=["GET"])
 def get_notes():
-    """Get notes (global or product-specific)."""
-    product_id = request.args.get("product_id")
+    """Get notes (global or project-specific)."""
+    project_id = request.args.get("project_id")
     note_type = request.args.get("note_type")
+    query_all = request.args.get("all") == "true"
     
     query = Note.query
-    if product_id:
-        query = query.filter_by(product_id=product_id)
-    else:
-        query = query.filter_by(product_id=None)
+    if not query_all:
+        if project_id:
+            query = query.filter_by(project_id=project_id)
+        else:
+            query = query.filter_by(project_id=None)
     
     if note_type:
         query = query.filter_by(note_type=note_type)

@@ -17,7 +17,7 @@ def create_prompt():
         }), 400
     
     prompt = Prompt(
-        product_id=data.get("product_id"),
+        project_id=data.get("project_id"),
         name=data["name"],
         category=data.get("category"),
         prompt_text=data["prompt_text"],
@@ -101,13 +101,13 @@ def use_prompt(prompt_id):
 
 @api_bp.route("/prompts", methods=["GET"])
 def get_prompts():
-    """Get all prompts (global and product-specific)."""
-    product_id = request.args.get("product_id")
+    """Get all prompts (global and project-specific)."""
+    project_id = request.args.get("project_id")
     category = request.args.get("category")
     
     query = Prompt.query
-    if product_id:
-        query = query.filter((Prompt.product_id == product_id) | (Prompt.product_id == None))
+    if project_id:
+        query = query.filter((Prompt.project_id == project_id) | (Prompt.project_id == None))
     if category:
         query = query.filter_by(category=category)
     

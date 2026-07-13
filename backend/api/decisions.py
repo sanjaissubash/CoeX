@@ -9,15 +9,15 @@ def create_decision():
     """Create new decision."""
     data = request.get_json()
     
-    if not data.get("product_id") or not data.get("title"):
+    if not data.get("project_id") or not data.get("title"):
         return jsonify({
             "success": False,
             "error": "Validation failed",
-            "details": "product_id and title are required"
+            "details": "project_id and title are required"
         }), 400
     
     decision = Decision(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         title=data["title"],
         description=data.get("description", ""),
         rationale=data.get("rationale"),
@@ -31,7 +31,7 @@ def create_decision():
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         action="CREATED",
         entity_type="Decision",
         entity_id=decision.id,
@@ -77,7 +77,7 @@ def update_decision(decision_id):
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=decision.product_id,
+        project_id=decision.project_id,
         action="UPDATED",
         entity_type="Decision",
         entity_id=decision.id
@@ -96,12 +96,12 @@ def delete_decision(decision_id):
     if not decision:
         return jsonify({"success": False, "error": "Decision not found"}), 404
     
-    product_id = decision.product_id
+    project_id = decision.project_id
     db.session.delete(decision)
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=product_id,
+        project_id=project_id,
         action="DELETED",
         entity_type="Decision",
         entity_id=decision_id
@@ -109,11 +109,11 @@ def delete_decision(decision_id):
     
     return jsonify({"success": True, "message": "Decision deleted successfully"})
 
-@api_bp.route("/products/<product_id>/decisions", methods=["GET"])
-def get_product_decisions(product_id):
-    """Get all decisions for a product."""
+@api_bp.route("/projects/<project_id>/decisions", methods=["GET"])
+def get_project_decisions(project_id):
+    """Get all decisions for a project."""
     status = request.args.get("status")
-    query = Decision.query.filter_by(product_id=product_id)
+    query = Decision.query.filter_by(project_id=project_id)
     if status:
         query = query.filter_by(status=status)
     decisions = query.order_by(Decision.decision_date.desc()).all()

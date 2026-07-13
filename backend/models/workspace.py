@@ -11,7 +11,7 @@ class Workspace(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     families = db.relationship("Family", backref="workspace", lazy=True, cascade="all, delete-orphan")
-    products = db.relationship("Product", backref="workspace", lazy=True, cascade="all, delete-orphan")
+    projects = db.relationship("Project", backref="workspace", lazy=True, cascade="all, delete-orphan")
     
     def to_dict(self):
         return {

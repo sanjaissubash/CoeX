@@ -8,7 +8,7 @@ class Milestone(db.Model):
     __table_args__ = {"extend_existing": True}
 
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    product_id = db.Column(db.String(36), db.ForeignKey("products.id"), nullable=False)
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id"), nullable=False)
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
     lifecycle_stage = db.Column(db.String(50), nullable=False)
@@ -23,7 +23,7 @@ class Milestone(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "product_id": self.product_id,
+            "project_id": self.project_id,
             "name": self.name,
             "description": self.description,
             "lifecycle_stage": self.lifecycle_stage,

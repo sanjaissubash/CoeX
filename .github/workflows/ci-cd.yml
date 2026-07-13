@@ -52,16 +52,10 @@ jobs:
   deploy:
     name: Deploy to EC2
     needs: [build-frontend, build-backend]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: SSH and Deploy on EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          script: |
-            export NEXT_PUBLIC_API_URL="${{ secrets.NEXT_PUBLIC_API_URL }}"
-            bash /var/www/coex/scripts/deploy.sh
+      - name: Execute Deploy Script Locally
+        run: |
+          export NEXT_PUBLIC_API_URL="${{ secrets.NEXT_PUBLIC_API_URL }}"
+          bash /var/www/coex/scripts/deploy.sh

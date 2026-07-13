@@ -6,7 +6,7 @@ import { apiClient } from "@/lib/api"
 
 interface ActivityItem {
   id: string
-  product_id: string
+  project_id: string
   action: string
   entity_type: string
   entity_id?: string
@@ -35,7 +35,7 @@ export default function ActivityPage() {
     <div className="space-y-8 p-8">
       <div>
         <h1 className="text-3xl font-bold">Activity</h1>
-        <p className="text-muted-foreground">Recent product changes</p>
+        <p className="text-muted-foreground">Recent project changes</p>
       </div>
 
       <div className="rounded-lg border border-border bg-card">
@@ -46,7 +46,7 @@ export default function ActivityPage() {
         ) : (
           <div className="divide-y divide-border">
             {activity.map((item) => (
-              <Link key={item.id} href={`/products/${item.product_id}`} className="block p-4 hover:bg-secondary/50">
+              <Link key={item.id} href={`/projects/${item.project_id}`} className="block p-4 hover:bg-secondary/50">
                 {(() => {
                   const detailTitle = item.details?.title ? String(item.details.title) : ""
                   return (

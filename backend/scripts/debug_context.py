@@ -10,21 +10,21 @@ from backend import create_app
 APP = create_app()
 
 
-def run(product_id: str):
+def run(project_id: str):
     with APP.app_context():
         # Import here so the module-level imports happen under app context
-        from backend.api.context_generator import generate_product_context
+        from backend.api.context_generator import generate_project_context
         try:
-            resp = generate_product_context(product_id)
+            resp = generate_project_context(project_id)
             # Flask view functions may return (response, status) tuples; print repr
             print("Response:", repr(resp))
         except Exception:
-            print("Exception when calling generate_product_context:\n")
+            print("Exception when calling generate_project_context:\n")
             traceback.print_exc()
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: debug_context.py <product_id>")
+        print("Usage: debug_context.py <project_id>")
         sys.exit(2)
     run(sys.argv[1])

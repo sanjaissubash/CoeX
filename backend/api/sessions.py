@@ -9,15 +9,15 @@ def create_session():
     """Create new session."""
     data = request.get_json()
     
-    if not data.get("product_id") or not data.get("goal"):
+    if not data.get("project_id") or not data.get("goal"):
         return jsonify({
             "success": False,
             "error": "Validation failed",
-            "details": "product_id and goal are required"
+            "details": "project_id and goal are required"
         }), 400
     
     session = Session(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         ai_tool=data.get("ai_tool", "manual"),
         goal=data["goal"],
         summary=data.get("summary", ""),
@@ -31,7 +31,7 @@ def create_session():
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         action="CREATED",
         entity_type="Session",
         entity_id=session.id,
@@ -76,7 +76,7 @@ def update_session(session_id):
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=session.product_id,
+        project_id=session.project_id,
         action="UPDATED",
         entity_type="Session",
         entity_id=session.id
@@ -95,12 +95,12 @@ def delete_session(session_id):
     if not session:
         return jsonify({"success": False, "error": "Session not found"}), 404
     
-    product_id = session.product_id
+    project_id = session.project_id
     db.session.delete(session)
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=product_id,
+        project_id=project_id,
         action="DELETED",
         entity_type="Session",
         entity_id=session_id
@@ -108,11 +108,11 @@ def delete_session(session_id):
     
     return jsonify({"success": True, "message": "Session deleted successfully"})
 
-@api_bp.route("/products/<product_id>/sessions", methods=["GET"])
-def get_product_sessions(product_id):
-    """Get all sessions for a product."""
+@api_bp.route("/projects/<project_id>/sessions", methods=["GET"])
+def get_project_sessions(project_id):
+    """Get all sessions for a project."""
     ai_tool = request.args.get("ai_tool")
-    query = Session.query.filter_by(product_id=product_id)
+    query = Session.query.filter_by(project_id=project_id)
     if ai_tool:
         query = query.filter_by(ai_tool=ai_tool)
     sessions = query.order_by(Session.session_date.desc()).all()

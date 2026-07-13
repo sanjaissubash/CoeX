@@ -1,5 +1,5 @@
 from backend.database import db
-from backend.models import ProductTemplate
+from backend.models import ProjectTemplate
 import json
 
 class TemplateService:
@@ -9,8 +9,8 @@ class TemplateService:
         defaults = [
             {
                 "id": "google-sheet",
-                "name": "Google Sheet Product",
-                "description": "Template for spreadsheet-based products",
+                "name": "Google Sheet Project",
+                "description": "Template for spreadsheet-based projects",
                 "default_tasks": json.dumps([
                     {"title": "Setup Google Sheet", "description": "Create and configure the base sheet"},
                     {"title": "Add formulas", "description": "Implement required formulas"},
@@ -24,8 +24,8 @@ class TemplateService:
             },
             {
                 "id": "resume",
-                "name": "Resume Product",
-                "description": "Template for resume/CV products",
+                "name": "Resume Project",
+                "description": "Template for resume/CV projects",
                 "default_tasks": json.dumps([
                     {"title": "Design layout", "description": "Create visual design"},
                     {"title": "Write content", "description": "Add professional content"},
@@ -40,8 +40,8 @@ class TemplateService:
         ]
         
         for template_data in defaults:
-            if not ProductTemplate.query.get(template_data["id"]):
-                template = ProductTemplate(
+            if not ProjectTemplate.query.get(template_data["id"]):
+                template = ProjectTemplate(
                     id=template_data["id"],
                     name=template_data["name"],
                     description=template_data["description"],

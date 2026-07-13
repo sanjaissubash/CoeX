@@ -8,7 +8,7 @@ class Task(db.Model):
     __table_args__ = {"extend_existing": True}
 
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    product_id = db.Column(db.String(36), db.ForeignKey("products.id"), nullable=False)
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id"), nullable=False)
     milestone_id = db.Column(db.String(36), db.ForeignKey("milestones.id"))
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
@@ -23,7 +23,7 @@ class Task(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "product_id": self.product_id,
+            "project_id": self.project_id,
             "milestone_id": self.milestone_id,
             "title": self.title,
             "description": self.description,

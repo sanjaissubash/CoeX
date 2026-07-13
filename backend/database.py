@@ -16,7 +16,7 @@ def init_db(app=None):
     storage_dir = project_root / "storage"
     storage_dir.mkdir(parents=True, exist_ok=True)
     (storage_dir / "families").mkdir(exist_ok=True)
-    (storage_dir / "products").mkdir(exist_ok=True)
+    (storage_dir / "projects").mkdir(exist_ok=True)
     (storage_dir / "exports").mkdir(exist_ok=True)
     (storage_dir / "uploads").mkdir(exist_ok=True)
     print(f"✅ Storage directories created at: {storage_dir}")

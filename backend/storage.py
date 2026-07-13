@@ -4,7 +4,7 @@ import os
 
 def ensure_storage_dirs(root: str | Path):
     root_path = Path(root)
-    dirs = ["families", "products", "uploads", "exports"]
+    dirs = ["families", "projects", "uploads", "exports"]
     root_path.mkdir(parents=True, exist_ok=True)
     for d in dirs:
         (root_path / d).mkdir(exist_ok=True)

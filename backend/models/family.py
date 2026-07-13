@@ -14,7 +14,7 @@ class Family(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    products = db.relationship("Product", backref="family", lazy=True, cascade="all, delete-orphan")
+    projects = db.relationship("Project", backref="family", lazy=True, cascade="all, delete-orphan")
     
     def to_dict(self):
         return {
@@ -23,7 +23,7 @@ class Family(db.Model):
             "description": self.description,
             "icon": self.icon,
             "sort_order": self.sort_order,
-            "product_count": len(self.products),
+            "project_count": len(self.projects),
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

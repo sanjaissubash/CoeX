@@ -14,7 +14,7 @@ export default function WorkspaceSelector() {
   const initializeWorkspace = useAppStore((s) => s.initializeWorkspace)
 
   const setFamilies = useAppStore((s) => s.setFamilies)
-  const setProducts = useAppStore((s) => s.setProducts)
+  const setProjects = useAppStore((s) => s.setProjects)
 
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(current?.id || null)
@@ -50,7 +50,7 @@ export default function WorkspaceSelector() {
   }, [])
 
   async function switchWorkspace(id: string) {
-    // If store initializer exists, prefer to call it so families/products are refetched
+    // If store initializer exists, prefer to call it so families/projects are refetched
     try {
       setLoading(true)
       // try to find locally
@@ -62,11 +62,11 @@ export default function WorkspaceSelector() {
   // do not persist workspace selection; app runs in single-global mode
         setCurrent(chosen as any)
 
-        // fetch families and products directly for immediate update
+        // fetch families and projects directly for immediate update
         const client = apiClient()
-        const [familiesRes, productsRes] = await Promise.all([
+        const [familiesRes, projectsRes] = await Promise.all([
           client.get(`/families?workspace_id=${encodeURIComponent(String(chosen.id))}`),
-          client.get(`/products?workspace_id=${encodeURIComponent(String(chosen.id))}`),
+          client.get(`/projects?workspace_id=${encodeURIComponent(String(chosen.id))}`),
         ])
 
         try {
@@ -74,7 +74,7 @@ export default function WorkspaceSelector() {
         } catch (e) { /* ignore parse errors */ }
 
         try {
-          if (productsRes.data && productsRes.data.success) setProducts(productsRes.data.data)
+          if (projectsRes.data && projectsRes.data.success) setProjects(projectsRes.data.data)
         } catch (e) { /* ignore parse errors */ }
       } else {
         // fallback: call initializer which will pick up saved id

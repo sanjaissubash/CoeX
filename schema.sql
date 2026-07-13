@@ -28,10 +28,10 @@ CREATE TABLE IF NOT EXISTS families (
 CREATE INDEX IF NOT EXISTS idx_families_workspace_id ON families(workspace_id);
 
 -- ============================================================================
--- PRODUCT TEMPLATES
+-- PROJECT TEMPLATES
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS product_templates (
+CREATE TABLE IF NOT EXISTS project_templates (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
@@ -44,10 +44,10 @@ CREATE TABLE IF NOT EXISTS product_templates (
 );
 
 -- ============================================================================
--- PRODUCT LAYER
+-- PROJECT LAYER
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS products (
+CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
   family_id TEXT NOT NULL,
@@ -64,21 +64,21 @@ CREATE TABLE IF NOT EXISTS products (
   ai_metadata TEXT,
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
   FOREIGN KEY (family_id) REFERENCES families(id),
-  FOREIGN KEY (template_id) REFERENCES product_templates(id)
+  FOREIGN KEY (template_id) REFERENCES project_templates(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_products_workspace_id ON products(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_products_family_id ON products(family_id);
-CREATE INDEX IF NOT EXISTS idx_products_lifecycle ON products(lifecycle);
-CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
+CREATE INDEX IF NOT EXISTS idx_projects_workspace_id ON projects(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_projects_family_id ON projects(family_id);
+CREATE INDEX IF NOT EXISTS idx_projects_lifecycle ON projects(lifecycle);
+CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
 
 -- ============================================================================
--- PRODUCT PROGRESS TRACKING (Multi-stage)
+-- PROJECT PROGRESS TRACKING (Multi-stage)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS product_progress (
+CREATE TABLE IF NOT EXISTS project_progress (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL UNIQUE,
+  project_id TEXT NOT NULL UNIQUE,
   idea_progress TEXT DEFAULT 'not_started',
   research_progress TEXT DEFAULT 'not_started',
   planning_progress TEXT DEFAULT 'not_started',
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS product_progress (
   published_progress TEXT DEFAULT 'not_started',
   optimizing_progress TEXT DEFAULT 'not_started',
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
 -- ============================================================================
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS product_progress (
 
 CREATE TABLE IF NOT EXISTS milestones (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
   lifecycle_stage TEXT NOT NULL,
@@ -106,10 +106,10 @@ CREATE TABLE IF NOT EXISTS milestones (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_milestones_product_id ON milestones(product_id);
+CREATE INDEX IF NOT EXISTS idx_milestones_project_id ON milestones(project_id);
 CREATE INDEX IF NOT EXISTS idx_milestones_lifecycle_stage ON milestones(lifecycle_stage);
 
 -- ============================================================================
@@ -118,7 +118,7 @@ CREATE INDEX IF NOT EXISTS idx_milestones_lifecycle_stage ON milestones(lifecycl
 
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   milestone_id TEXT,
   title TEXT NOT NULL,
   description TEXT,
@@ -129,11 +129,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id),
+  FOREIGN KEY (project_id) REFERENCES projects(id),
   FOREIGN KEY (milestone_id) REFERENCES milestones(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_tasks_product_id ON tasks(product_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_milestone_id ON tasks(milestone_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 
@@ -143,7 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 
 CREATE TABLE IF NOT EXISTS decisions (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT NOT NULL,
   rationale TEXT,
@@ -153,10 +153,10 @@ CREATE TABLE IF NOT EXISTS decisions (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   ai_metadata TEXT,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_decisions_product_id ON decisions(product_id);
+CREATE INDEX IF NOT EXISTS idx_decisions_project_id ON decisions(project_id);
 
 -- ============================================================================
 -- KNOWLEDGE MODULE: CONTEXT BLOCKS (High-Value Memory)
@@ -164,7 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_decisions_product_id ON decisions(product_id);
 
 CREATE TABLE IF NOT EXISTS context_blocks (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   block_type TEXT,
@@ -172,10 +172,10 @@ CREATE TABLE IF NOT EXISTS context_blocks (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   ai_metadata TEXT,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_context_blocks_product_id ON context_blocks(product_id);
+CREATE INDEX IF NOT EXISTS idx_context_blocks_project_id ON context_blocks(project_id);
 CREATE INDEX IF NOT EXISTS idx_context_blocks_priority ON context_blocks(priority);
 
 -- ============================================================================
@@ -184,7 +184,7 @@ CREATE INDEX IF NOT EXISTS idx_context_blocks_priority ON context_blocks(priorit
 
 CREATE TABLE IF NOT EXISTS research (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   title TEXT NOT NULL,
   source TEXT,
   url TEXT,
@@ -193,10 +193,10 @@ CREATE TABLE IF NOT EXISTS research (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   ai_metadata TEXT,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_research_product_id ON research(product_id);
+CREATE INDEX IF NOT EXISTS idx_research_project_id ON research(project_id);
 
 -- ============================================================================
 -- WORK HISTORY: SESSIONS (ChatGPT, Claude, Gemini, Manual)
@@ -204,7 +204,7 @@ CREATE INDEX IF NOT EXISTS idx_research_product_id ON research(product_id);
 
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   ai_tool TEXT NOT NULL,
   goal TEXT NOT NULL,
   summary TEXT NOT NULL,
@@ -215,10 +215,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   ai_metadata TEXT,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_product_id ON sessions(product_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_ai_tool ON sessions(ai_tool);
 
 -- ============================================================================
@@ -227,7 +227,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_ai_tool ON sessions(ai_tool);
 
 CREATE TABLE IF NOT EXISTS prompts (
   id TEXT PRIMARY KEY,
-  product_id TEXT,
+  project_id TEXT,
   name TEXT NOT NULL,
   category TEXT,
   prompt_text TEXT NOT NULL,
@@ -235,10 +235,10 @@ CREATE TABLE IF NOT EXISTS prompts (
   usage_count INTEGER DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_prompts_product_id ON prompts(product_id);
+CREATE INDEX IF NOT EXISTS idx_prompts_project_id ON prompts(project_id);
 CREATE INDEX IF NOT EXISTS idx_prompts_category ON prompts(category);
 
 -- ============================================================================
@@ -247,7 +247,7 @@ CREATE INDEX IF NOT EXISTS idx_prompts_category ON prompts(category);
 
 CREATE TABLE IF NOT EXISTS assets (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   name TEXT NOT NULL,
   file_path TEXT NOT NULL,
   file_type TEXT,
@@ -258,10 +258,10 @@ CREATE TABLE IF NOT EXISTS assets (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   uploaded_by TEXT,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_assets_product_id ON assets(product_id);
+CREATE INDEX IF NOT EXISTS idx_assets_project_id ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_assets_asset_type ON assets(asset_type);
 
 -- ============================================================================
@@ -270,7 +270,7 @@ CREATE INDEX IF NOT EXISTS idx_assets_asset_type ON assets(asset_type);
 
 CREATE TABLE IF NOT EXISTS marketing (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL UNIQUE,
+  project_id TEXT NOT NULL UNIQUE,
   target_audience TEXT,
   key_benefits TEXT,
   pricing_strategy TEXT,
@@ -282,10 +282,10 @@ CREATE TABLE IF NOT EXISTS marketing (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   ai_metadata TEXT,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_marketing_product_id ON marketing(product_id);
+CREATE INDEX IF NOT EXISTS idx_marketing_project_id ON marketing(project_id);
 
 -- ============================================================================
 -- SELLING MODULE: VERSIONS
@@ -293,17 +293,17 @@ CREATE INDEX IF NOT EXISTS idx_marketing_product_id ON marketing(product_id);
 
 CREATE TABLE IF NOT EXISTS versions (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   version_number TEXT NOT NULL,
   release_date TIMESTAMP,
   changes TEXT,
   status TEXT DEFAULT 'draft',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_versions_product_id ON versions(product_id);
+CREATE INDEX IF NOT EXISTS idx_versions_project_id ON versions(project_id);
 
 -- ============================================================================
 -- SELLING MODULE: LINKS
@@ -311,17 +311,17 @@ CREATE INDEX IF NOT EXISTS idx_versions_product_id ON versions(product_id);
 
 CREATE TABLE IF NOT EXISTS links (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   title TEXT NOT NULL,
   url TEXT NOT NULL,
   link_type TEXT,
   description TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_links_product_id ON links(product_id);
+CREATE INDEX IF NOT EXISTS idx_links_project_id ON links(project_id);
 
 -- ============================================================================
 -- NOTES SYSTEM
@@ -329,17 +329,17 @@ CREATE INDEX IF NOT EXISTS idx_links_product_id ON links(product_id);
 
 CREATE TABLE IF NOT EXISTS notes (
   id TEXT PRIMARY KEY,
-  product_id TEXT,
+  project_id TEXT,
   note_type TEXT NOT NULL,
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   pinned BOOLEAN DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_notes_product_id ON notes(product_id);
+CREATE INDEX IF NOT EXISTS idx_notes_project_id ON notes(project_id);
 CREATE INDEX IF NOT EXISTS idx_notes_note_type ON notes(note_type);
 
 -- ============================================================================
@@ -348,16 +348,16 @@ CREATE INDEX IF NOT EXISTS idx_notes_note_type ON notes(note_type);
 
 CREATE TABLE IF NOT EXISTS activity_logs (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   action TEXT NOT NULL,
   entity_type TEXT NOT NULL,
   entity_id TEXT,
   details TEXT,
   timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_activity_logs_product_id ON activity_logs(product_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_project_id ON activity_logs(project_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON activity_logs(action);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON activity_logs(timestamp);
 
@@ -367,17 +367,17 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON activity_logs(timestam
 
 CREATE TABLE IF NOT EXISTS search_index (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   entity_type TEXT NOT NULL,
   entity_id TEXT NOT NULL,
   title TEXT,
   content TEXT,
   searchable_text TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_search_index_product_id ON search_index(product_id);
+CREATE INDEX IF NOT EXISTS idx_search_index_project_id ON search_index(project_id);
 CREATE INDEX IF NOT EXISTS idx_search_index_entity_type ON search_index(entity_type);
 
 -- ============================================================================
@@ -386,7 +386,7 @@ CREATE INDEX IF NOT EXISTS idx_search_index_entity_type ON search_index(entity_t
 
 CREATE TABLE IF NOT EXISTS health_score_components (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL UNIQUE,
+  project_id TEXT NOT NULL UNIQUE,
   milestones_score REAL DEFAULT 0.0,
   tasks_score REAL DEFAULT 0.0,
   context_completeness_score REAL DEFAULT 0.0,
@@ -395,7 +395,7 @@ CREATE TABLE IF NOT EXISTS health_score_components (
   documentation_completeness_score REAL DEFAULT 0.0,
   overall_score REAL DEFAULT 0.0,
   calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id)
+  FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
 -- ============================================================================
@@ -405,11 +405,11 @@ CREATE TABLE IF NOT EXISTS health_score_components (
 INSERT OR IGNORE INTO workspaces (id, name) VALUES ('default', 'Default Workspace');
 
 -- ============================================================================
--- INSERT DEFAULT PRODUCT TEMPLATES
+-- INSERT DEFAULT PROJECT TEMPLATES
 -- ============================================================================
 
-INSERT OR IGNORE INTO product_templates (id, name, description) VALUES
-  ('google-sheet', 'Google Sheet Product', 'Template for spreadsheet-based products'),
-  ('resume', 'Resume Product', 'Template for resume/CV products'),
-  ('journal', 'Journal Product', 'Template for journal-based products'),
-  ('planner', 'Planner Product', 'Template for planning/organization products');
+INSERT OR IGNORE INTO project_templates (id, name, description) VALUES
+  ('google-sheet', 'Google Sheet Project', 'Template for spreadsheet-based projects'),
+  ('resume', 'Resume Project', 'Template for resume/CV projects'),
+  ('journal', 'Journal Project', 'Template for journal-based projects'),
+  ('planner', 'Planner Project', 'Template for planning/organization projects');

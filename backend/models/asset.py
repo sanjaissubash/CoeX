@@ -6,7 +6,7 @@ class Asset(db.Model):
     __tablename__ = "assets"
 
     id = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.String(36), db.ForeignKey("products.id"), nullable=False)
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id"), nullable=False)
     folder_id = db.Column(db.Integer, db.ForeignKey("asset_folders.id"), nullable=True)
     
     name = db.Column(db.String(200), nullable=False)

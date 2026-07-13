@@ -6,7 +6,7 @@ class Prompt(db.Model):
     __tablename__ = "prompts"
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    product_id = db.Column(db.String(36), db.ForeignKey("products.id"))
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id"))
     name = db.Column(db.String(255), nullable=False)
     category = db.Column(db.String(100))
     prompt_text = db.Column(db.Text, nullable=False)
@@ -20,7 +20,7 @@ class Prompt(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "product_id": self.product_id,
+            "project_id": self.project_id,
             "name": self.name,
             "category": self.category,
             "prompt_text": self.prompt_text,

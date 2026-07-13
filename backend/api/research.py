@@ -9,15 +9,15 @@ def create_research():
     """Create new research entry."""
     data = request.get_json()
     
-    if not data.get("product_id") or not data.get("title"):
+    if not data.get("project_id") or not data.get("title"):
         return jsonify({
             "success": False,
             "error": "Validation failed",
-            "details": "product_id and title are required"
+            "details": "project_id and title are required"
         }), 400
     
     research = Research(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         title=data["title"],
         category=data.get("category", "general"),
         source=data.get("source"),
@@ -31,7 +31,7 @@ def create_research():
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         action="CREATED",
         entity_type="Research",
         entity_id=research.id,
@@ -77,7 +77,7 @@ def update_research(research_id):
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=research.product_id,
+        project_id=research.project_id,
         action="UPDATED",
         entity_type="Research",
         entity_id=research.id
@@ -96,12 +96,12 @@ def delete_research(research_id):
     if not research:
         return jsonify({"success": False, "error": "Research not found"}), 404
     
-    product_id = research.product_id
+    project_id = research.project_id
     db.session.delete(research)
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=product_id,
+        project_id=project_id,
         action="DELETED",
         entity_type="Research",
         entity_id=research_id
@@ -109,11 +109,11 @@ def delete_research(research_id):
     
     return jsonify({"success": True, "message": "Research deleted successfully"})
 
-@api_bp.route("/products/<product_id>/research", methods=["GET"])
-def get_product_research(product_id):
-    """Get all research for a product."""
+@api_bp.route("/projects/<project_id>/research", methods=["GET"])
+def get_project_research(project_id):
+    """Get all research for a project."""
     category = request.args.get("category")
-    query = Research.query.filter_by(product_id=product_id)
+    query = Research.query.filter_by(project_id=project_id)
     if category:
         query = query.filter_by(category=category)
     research = query.order_by(Research.created_at.desc()).all()

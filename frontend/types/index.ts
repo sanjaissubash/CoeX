@@ -11,12 +11,12 @@ export interface Family {
   description?: string
   icon?: string
   sort_order: number
-  product_count: number
+  project_count: number
   created_at: string
   updated_at: string
 }
 
-export interface Product {
+export interface Project {
   id: string
   family_id: string
   template_id?: string

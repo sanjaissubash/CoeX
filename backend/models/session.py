@@ -6,7 +6,7 @@ class Session(db.Model):
     __tablename__ = "sessions"
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    product_id = db.Column(db.String(36), db.ForeignKey("products.id"), nullable=False)
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id"), nullable=False)
     ai_tool = db.Column(db.String(100), nullable=False)
     goal = db.Column(db.String(255), nullable=False)
     summary = db.Column(db.Text, nullable=False)
@@ -22,7 +22,7 @@ class Session(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "product_id": self.product_id,
+            "project_id": self.project_id,
             "ai_tool": self.ai_tool,
             "goal": self.goal,
             "summary": self.summary,

@@ -10,15 +10,15 @@ def create_milestone():
     """Create new milestone."""
     data = request.get_json()
     
-    if not data.get("product_id") or not data.get("name"):
+    if not data.get("project_id") or not data.get("name"):
         return jsonify({
             "success": False,
             "error": "Validation failed",
-            "details": "product_id and name are required"
+            "details": "project_id and name are required"
         }), 400
     
     milestone = Milestone(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         name=data["name"],
         description=data.get("description"),
         lifecycle_stage=data.get("lifecycle_stage", "IDEA"),
@@ -29,7 +29,7 @@ def create_milestone():
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         action="CREATED",
         entity_type="Milestone",
         entity_id=milestone.id,
@@ -75,7 +75,7 @@ def update_milestone(milestone_id):
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=milestone.product_id,
+        project_id=milestone.project_id,
         action="UPDATED",
         entity_type="Milestone",
         entity_id=milestone.id
@@ -94,12 +94,12 @@ def delete_milestone(milestone_id):
     if not milestone:
         return jsonify({"success": False, "error": "Milestone not found"}), 404
     
-    product_id = milestone.product_id
+    project_id = milestone.project_id
     db.session.delete(milestone)
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=product_id,
+        project_id=project_id,
         action="DELETED",
         entity_type="Milestone",
         entity_id=milestone_id
@@ -107,10 +107,10 @@ def delete_milestone(milestone_id):
     
     return jsonify({"success": True, "message": "Milestone deleted successfully"})
 
-@api_bp.route("/products/<product_id>/milestones", methods=["GET"])
-def get_product_milestones(product_id):
-    """Get all milestones for a product."""
-    milestones = Milestone.query.filter_by(product_id=product_id).order_by(Milestone.sort_order).all()
+@api_bp.route("/projects/<project_id>/milestones", methods=["GET"])
+def get_project_milestones(project_id):
+    """Get all milestones for a project."""
+    milestones = Milestone.query.filter_by(project_id=project_id).order_by(Milestone.sort_order).all()
     return jsonify({
         "success": True,
         "data": [m.to_dict() for m in milestones],

@@ -9,15 +9,15 @@ def create_context_block():
     """Create new context block."""
     data = request.get_json()
     
-    if not data.get("product_id") or not data.get("title"):
+    if not data.get("project_id") or not data.get("title"):
         return jsonify({
             "success": False,
             "error": "Validation failed",
-            "details": "product_id and title are required"
+            "details": "project_id and title are required"
         }), 400
     
     block = ContextBlock(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         title=data["title"],
         content=data.get("content", ""),
         block_type=data.get("block_type"),
@@ -28,7 +28,7 @@ def create_context_block():
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=data["product_id"],
+        project_id=data["project_id"],
         action="CREATED",
         entity_type="ContextBlock",
         entity_id=block.id,
@@ -71,7 +71,7 @@ def update_context_block(block_id):
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=block.product_id,
+        project_id=block.project_id,
         action="UPDATED",
         entity_type="ContextBlock",
         entity_id=block.id
@@ -90,12 +90,12 @@ def delete_context_block(block_id):
     if not block:
         return jsonify({"success": False, "error": "Context block not found"}), 404
     
-    product_id = block.product_id
+    project_id = block.project_id
     db.session.delete(block)
     db.session.commit()
     
     ActivityService.log_action(
-        product_id=product_id,
+        project_id=project_id,
         action="DELETED",
         entity_type="ContextBlock",
         entity_id=block_id
@@ -103,10 +103,19 @@ def delete_context_block(block_id):
     
     return jsonify({"success": True, "message": "Context block deleted successfully"})
 
-@api_bp.route("/products/<product_id>/context-blocks", methods=["GET"])
-def get_product_context_blocks(product_id):
-    """Get all context blocks for a product."""
-    blocks = ContextBlock.query.filter_by(product_id=product_id).order_by(ContextBlock.priority.desc()).all()
+@api_bp.route("/projects/<project_id>/context-blocks", methods=["GET"])
+def get_project_context_blocks(project_id):
+    """Get all context blocks for a project."""
+    block_type = request.args.get("block_type")
+    query = ContextBlock.query.filter_by(project_id=project_id)
+    if block_type:
+        # Support fetching general blocks by querying for "general" which maps to None or "general"
+        if block_type == "general":
+            query = query.filter(ContextBlock.block_type.in_([None, "", "general"]))
+        else:
+            query = query.filter_by(block_type=block_type)
+    
+    blocks = query.order_by(ContextBlock.priority.desc()).all()
     return jsonify({
         "success": True,
         "data": [b.to_dict() for b in blocks],
