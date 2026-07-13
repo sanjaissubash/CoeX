@@ -1,29 +1,59 @@
-# Python
-*.pyc
+# Python / Flask
 __pycache__/
+*.py[cod]
+*$py.class
 .venv/
-.venv_backend/
 venv/
 env/
-instance/*.db
 .env
+.env.*
+!.env.example
 
-# Node
+# Databases (SQLite)
+*.db
+*.db-shm
+*.db-wal
+storage/*.db
+storage/*.db-shm
+storage/*.db-wal
+
+# Storage & Uploads (exclude runtime user files)
+storage/products/*
+storage/families/*
+storage/uploads/*
+storage/exports/*.tar.gz
+storage/exports/*.zip
+storage/exports/*.tgz
+
+# Node.js
 node_modules/
 .next/
 dist/
 build/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# OS
+# OS-specific
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Editor
+# IDEs / Editors
 .vscode/
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
 
-# Secrets and keys
-*.pem
-*.key
-
-# Logs
+# Application logs
+logs/
 *.log
+/tmp/
