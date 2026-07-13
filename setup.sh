@@ -32,9 +32,71 @@ if [ "$env_choice" = "1" ]; then
 
   # Setup Virtual Environment
   echo "🐍 Initializing Python Virtual Environment (.venv)..."
-  if [ ! -d .venv ]; then
-    python3 -m venv .venv
+  # Prefer specific Python interpreters known to be compatible (3.11, 3.12, 3.10),
+  # fall back to system python3 if needed.
+  PYTHON=$(command -v python3.11 || command -v python3.12 || command -v python3.10 || command -v python3)
+  if [ -z "$PYTHON" ]; then
+    echo "❌ Error: No suitable Python interpreter found (tried python3.11, python3.12, python3.10, python3)." >&2
+    exit 1
   fi
+  echo "Using Python interpreter: $PYTHON"
+  PY_VER=$($PYTHON -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+  if [ "${PY_VER}" = "3.13" ] || ( [ "${PY_VER%%.*}" = "3" ] && [ "${PY_VER#*.}" -ge 13 ] 2>/dev/null ); then
+    echo ""
+    echo "⚠️ Unsupported Python version detected: ${PY_VER}." >&2
+    echo "The project requires Python 3.10/3.11/3.12 for SQLAlchemy compatibility." >&2
+    read -rp "Install python@3.11 via Homebrew now? (y/N): " install_py
+    if [ "$install_py" = "y" ] || [ "$install_py" = "Y" ]; then
+      if ! command -v brew >/dev/null 2>&1; then
+        echo "❌ Homebrew is not installed. Please install Homebrew from https://brew.sh and re-run this script." >&2
+        exit 1
+      fi
+      echo "Installing python@3.11 via Homebrew (auto-confirming)..."
+      export HOMEBREW_NO_AUTO_UPDATE=1
+      export HOMEBREW_NO_ENV_HINTS=1
+      yes | brew install python@3.11
+      # attempt to link so python3.11 is on PATH
+      brew link --overwrite python@3.11 || true
+      # Try to locate the installed python3.11 binary
+      PYTHON=$(command -v python3.11 || /opt/homebrew/opt/python@3.11/bin/python3.11 || /usr/local/opt/python@3.11/bin/python3.11 || true)
+      if [ -z "$PYTHON" ]; then
+        echo "❌ python3.11 not found after Homebrew install. Please ensure Homebrew installed python@3.11 correctly." >&2
+        exit 1
+      fi
+      echo "Installed: $($PYTHON --version 2>&1)"
+      PY_VER=$($PYTHON -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      if [ "${PY_VER}" = "3.13" ] || ( [ "${PY_VER%%.*}" = "3" ] && [ "${PY_VER#*.}" -ge 13 ] 2>/dev/null ); then
+        echo "❌ Installed Python is still unsupported: ${PY_VER}. Aborting." >&2
+        exit 1
+      fi
+    else
+      echo "Please install Python 3.11 or 3.12 (example: brew install python@3.11) and re-run this script." >&2
+      exit 1
+    fi
+  fi
+  # If .venv exists, verify its Python version; if incompatible, recreate it.
+  recreate_venv=false
+  if [ -d .venv ]; then
+    if [ -x .venv/bin/python ]; then
+      EXISTING_VER=$(.venv/bin/python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      if [ "${EXISTING_VER}" = "${PY_VER}" ]; then
+        echo "Found existing .venv with Python ${EXISTING_VER}, reusing."
+      else
+        echo "Existing .venv Python ${EXISTING_VER} is incompatible; will recreate with ${PY_VER}."
+        recreate_venv=true
+      fi
+    else
+      recreate_venv=true
+    fi
+  else
+    recreate_venv=true
+  fi
+
+  if [ "$recreate_venv" = true ]; then
+    rm -rf .venv
+    "$PYTHON" -m venv .venv
+  fi
+
   .venv/bin/python -m pip install --upgrade pip setuptools wheel
   .venv/bin/python -m pip install -r backend/requirements.txt
 
@@ -94,12 +156,67 @@ elif [ "$env_choice" = "2" ]; then
   chmod -R 775 storage logs
 
   # Setup Virtual Environment
-  echo "🐍 Initializing Python Virtual Environment (.venv)..."
-  if [ ! -d .venv ]; then
-    python3 -m venv .venv
+  echo "🐍 Initializing Python Virtual Environment (venv)..."
+  # Prefer specific Python interpreters known to be compatible (3.11, 3.12, 3.10),
+  # fall back to system python3 if needed.
+  PYTHON=$(command -v python3.11 || command -v python3.12 || command -v python3.10 || command -v python3)
+  if [ -z "$PYTHON" ]; then
+    echo "❌ Error: No suitable Python interpreter found (tried python3.11, python3.12, python3.10, python3)." >&2
+    exit 1
   fi
-  .venv/bin/python -m pip install --upgrade pip setuptools wheel
-  .venv/bin/python -m pip install -r backend/requirements.txt
+  echo "Using Python interpreter: $PYTHON"
+  PY_VER=$($PYTHON -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+  # If Python is unsupported (3.13+), offer to install python3.11 via apt
+  if [ "${PY_VER}" = "3.13" ] || ( [ "${PY_VER%%.*}" = "3" ] && [ "${PY_VER#*.}" -ge 13 ] 2>/dev/null ); then
+    echo ""
+    echo "⚠️ Unsupported Python version detected: ${PY_VER}." >&2
+    echo "The project requires Python 3.10/3.11/3.12 for SQLAlchemy compatibility." >&2
+    read -rp "Install python3.11 via apt now? (requires sudo) (y/N): " install_py
+    if [ "$install_py" = "y" ] || [ "$install_py" = "Y" ]; then
+      echo "Installing python3.11 and venv packages via apt (non-interactive)..."
+      sudo env DEBIAN_FRONTEND=noninteractive apt-get update -y
+      sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y python3.11 python3.11-venv python3.11-distutils
+      PYTHON=$(command -v python3.11 || true)
+      if [ -z "$PYTHON" ]; then
+        echo "❌ python3.11 not found after apt install. Please check apt logs." >&2
+        exit 1
+      fi
+      echo "Installed: $($PYTHON --version 2>&1)"
+      PY_VER=$($PYTHON -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      if [ "${PY_VER}" = "3.13" ] || ( [ "${PY_VER%%.*}" = "3" ] && [ "${PY_VER#*.}" -ge 13 ] 2>/dev/null ); then
+        echo "❌ Installed Python is still unsupported: ${PY_VER}. Aborting." >&2
+        exit 1
+      fi
+    else
+      echo "Please install Python 3.11 or 3.12 and re-run this script." >&2
+      exit 1
+    fi
+  fi
+
+  # If venv exists, verify its Python version; if incompatible, recreate it.
+  recreate_venv=false
+  if [ -d venv ]; then
+    if [ -x venv/bin/python ]; then
+      EXISTING_VER=$(venv/bin/python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      if [ "${EXISTING_VER}" = "${PY_VER}" ]; then
+        echo "Found existing venv with Python ${EXISTING_VER}, reusing."
+      else
+        echo "Existing venv Python ${EXISTING_VER} is incompatible; will recreate with ${PY_VER}."
+        recreate_venv=true
+      fi
+    else
+      recreate_venv=true
+    fi
+  else
+    recreate_venv=true
+  fi
+
+  if [ "$recreate_venv" = true ]; then
+    rm -rf venv
+    "$PYTHON" -m venv venv
+  fi
+  venv/bin/python -m pip install --upgrade pip setuptools wheel
+  venv/bin/python -m pip install -r backend/requirements.txt
 
   # Config Backend Environment
   echo "⚙️ Creating backend/.env..."
@@ -126,6 +243,87 @@ EOF
   echo "🏗️ Building Next.js production bundle..."
   NEXT_PUBLIC_API_URL="${API_URL}" npm run build
   cd ..
+
+  # Install and configure Nginx to reverse-proxy frontend and backend
+  echo "🔧 Installing and configuring Nginx..."
+  sudo apt-get install -y nginx
+  REPO_ROOT="$(pwd)"
+  # Create nginx site config
+  NGINX_CONF="/etc/nginx/sites-available/coex"
+  sudo tee "$NGINX_CONF" >/dev/null <<EOF
+server {
+    listen 80;
+    server_name _;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:5001/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /_next/ {
+        proxy_pass http://127.0.0.1:3000/_next/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+  sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/coex
+  # Test and reload nginx
+  sudo nginx -t && sudo systemctl restart nginx
+
+  # Create systemd services for backend and frontend (so GitHub Actions or manual scripts can start/stop)
+  echo "🔧 Creating systemd service units for CoeX..."
+  BACKEND_SERVICE="/etc/systemd/system/coex-backend.service"
+  FRONTEND_SERVICE="/etc/systemd/system/coex-frontend.service"
+  sudo tee "$BACKEND_SERVICE" >/dev/null <<EOF
+[Unit]
+Description=CoeX Backend
+After=network.target
+
+[Service]
+Type=simple
+User=$(whoami)
+WorkingDirectory=${REPO_ROOT}
+ExecStart=${REPO_ROOT}/venv/bin/python -m backend.run --host 127.0.0.1 --port 5001
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  sudo tee "$FRONTEND_SERVICE" >/dev/null <<EOF
+[Unit]
+Description=CoeX Frontend (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=$(whoami)
+WorkingDirectory=${REPO_ROOT}/frontend
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/bin/bash -lc 'npm run start'
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now coex-backend.service coex-frontend.service || true
 
   echo ""
   echo "======================================"
