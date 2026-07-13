@@ -227,8 +227,8 @@ SQLALCHEMY_DATABASE_URI=sqlite:///storage/coex.db
 EOF
 
   # Ask for Custom API URL (eg. https://domain.com/api) for frontend compilation
-  read -rp "Enter public domain/IP API URL (fallback: http://localhost:5001/api): " custom_api_url
-  API_URL="${custom_api_url:-http://localhost:5001/api}"
+  read -rp "Enter public domain/IP API URL (fallback: /api): " custom_api_url
+  API_URL="${custom_api_url:-/api}"
 
   echo "⚙️ Creating frontend/.env.local..."
   cat > frontend/.env.local << EOF

@@ -1,11 +1,15 @@
 import axios from "axios"
 
 export function getApiBase() {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL
+  if (envUrl) {
+    return envUrl
+  }
   if (typeof window !== "undefined") {
     const stored = localStorage.getItem("projectos_api_url")
     if (stored) return stored
   }
-  return process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5001/api"
+  return "/api"
 }
 
 export function apiClient() {
