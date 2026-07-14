@@ -22,6 +22,16 @@ check_dep() {
 
 if [ "$env_choice" = "1" ]; then
   echo "💻 Configuring Local macOS Environment..."
+  
+  # Ensure Xcode Command Line Tools are present (required for compiling wheel files on M1 Macs)
+  if ! xcode-select -p &>/dev/null; then
+    echo "⚠️ Xcode Command Line Tools are required to build python packages on macOS."
+    echo "Starting installer..."
+    xcode-select --install
+    echo "Please complete the Xcode Command Line Tools installation dialog and then re-run this script."
+    exit 1
+  fi
+
   check_dep python3
   check_dep node
   check_dep npm
@@ -47,16 +57,18 @@ if [ "$env_choice" = "1" ]; then
     echo "The project requires Python 3.10/3.11/3.12 for SQLAlchemy compatibility." >&2
     read -rp "Install python@3.11 via Homebrew now? (y/N): " install_py
     if [ "$install_py" = "y" ] || [ "$install_py" = "Y" ]; then
-      if ! command -v brew >/dev/null 2>&1; then
+      # Check for brew command in path or standard M1/Intel install folders
+      BREW_CMD=$(command -v brew || command -v /opt/homebrew/bin/brew || command -v /usr/local/bin/brew || true)
+      if [ -z "$BREW_CMD" ]; then
         echo "❌ Homebrew is not installed. Please install Homebrew from https://brew.sh and re-run this script." >&2
         exit 1
       fi
-      echo "Installing python@3.11 via Homebrew (auto-confirming)..."
+      echo "Installing python@3.11 via Homebrew..."
       export HOMEBREW_NO_AUTO_UPDATE=1
       export HOMEBREW_NO_ENV_HINTS=1
-      yes | brew install python@3.11
+      "$BREW_CMD" install python@3.11
       # attempt to link so python3.11 is on PATH
-      brew link --overwrite python@3.11 || true
+      "$BREW_CMD" link --overwrite python@3.11 || true
       # Try to locate the installed python3.11 binary
       PYTHON=$(command -v python3.11 || /opt/homebrew/opt/python@3.11/bin/python3.11 || /usr/local/opt/python@3.11/bin/python3.11 || true)
       if [ -z "$PYTHON" ]; then
