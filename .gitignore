@@ -18,12 +18,10 @@ storage/*.db-shm
 storage/*.db-wal
 
 # Storage & Uploads (exclude runtime user files)
-storage/products/*
+storage/projects/*
 storage/families/*
 storage/uploads/*
-storage/exports/*.tar.gz
-storage/exports/*.zip
-storage/exports/*.tgz
+storage/exports/*
 
 # Node.js
 node_modules/
