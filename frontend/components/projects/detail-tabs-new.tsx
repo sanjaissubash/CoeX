@@ -8,9 +8,8 @@ import { ArchitectureOverviewSection } from "@/components/projects/sections/arch
 import { ImprovementsSection } from "@/components/projects/sections/improvements-section"
 import { DecisionsSection } from "@/components/projects/sections/decisions-section"
 import { NotesSection } from "@/components/projects/sections/notes-section"
-import { PromptsSection } from "@/components/projects/sections/prompts-section"
 import { ResearchSection } from "@/components/projects/sections/research-section"
-import { SessionsSection } from "@/components/projects/sections/sessions-section"
+import { ComplianceSection } from "@/components/projects/sections/compliance-section"
 import { TasksSection } from "@/components/projects/sections/tasks-section"
 
 interface DetailTabsProps {
@@ -22,7 +21,7 @@ const tabs = [
   { id: "planning", label: "Planning" },
   { id: "knowledge", label: "Knowledge" },
   { id: "assets", label: "Assets" },
-  { id: "system", label: "System" },
+  { id: "compliance", label: "Compliance" },
 ]
 
 function OverviewPane({ projectId }: { projectId: string }) {
@@ -140,12 +139,8 @@ export function ProjectDetailTabs({ projectId }: DetailTabsProps) {
 
 
 
-        {activeTab === "system" && (
-          <div className="space-y-6 p-6">
-            <h3 className="text-lg font-bold">System</h3>
-            <PromptsSection projectId={projectId} />
-            <SessionsSection projectId={projectId} />
-          </div>
+        {activeTab === "compliance" && (
+          <ComplianceSection projectId={projectId} />
         )}
       </div>
     </div>
