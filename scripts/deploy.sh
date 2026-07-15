@@ -98,7 +98,8 @@ run "\"$BACKEND_PY\" -m pip install --upgrade pip setuptools wheel"
 run "\"$BACKEND_PY\" -m pip install -r backend/requirements.txt"
 
 echo "🗄️ Applying DB migrations (Alembic if available)"
-if [ -f backend/alembic.ini ] || [ -d backend/migrations ]; then
+# Only run Alembic if both config and migrations directory exist
+if [ -f backend/alembic.ini ] && [ -d backend/migrations ]; then
   echo "Running alembic upgrade head"
   run "\"$BACKEND_PY\" -m alembic -c backend/alembic.ini upgrade head || true"
 else
