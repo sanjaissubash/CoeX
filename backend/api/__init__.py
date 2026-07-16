@@ -32,5 +32,6 @@ from backend.api import tasks
 from backend.api import compliance
 from backend.api import audit
 from backend.api import cloudtrail
+from backend.api import cloudtrail_watch
 
 __all__ = ["api_bp"]

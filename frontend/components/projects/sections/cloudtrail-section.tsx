@@ -21,6 +21,11 @@ import {
   ChevronUp,
   FileText,
   CalendarRange,
+  Radar,
+  Power,
+  PowerOff,
+  Clock,
+  RefreshCw,
 } from "lucide-react"
 
 interface CloudTrailSectionProps {
@@ -89,9 +94,29 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
   const [result, setResult] = useState<any>(null)
   const [creatingTaskFor, setCreatingTaskFor] = useState<string>("")
 
+  // Watch rules (automatic task creation)
+  const [watchRules, setWatchRules] = useState<any[]>([])
+  const [loadingRules, setLoadingRules] = useState<boolean>(false)
+  const [isRuleModalOpen, setIsRuleModalOpen] = useState<boolean>(false)
+  const [checkingRuleId, setCheckingRuleId] = useState<string>("")
+  const [ruleName, setRuleName] = useState<string>("")
+  const [ruleResourceId, setRuleResourceId] = useState<string>("")
+  const [ruleEventNames, setRuleEventNames] = useState<string>("")
+  const [ruleKeywords, setRuleKeywords] = useState<string>("")
+  const [ruleRiskyOnly, setRuleRiskyOnly] = useState<boolean>(false)
+  const [rulePriorityOverride, setRulePriorityOverride] = useState<string>("")
+
   useEffect(() => {
     loadSources()
   }, [projectId])
+
+  useEffect(() => {
+    if (selectedSourceId) {
+      loadWatchRules()
+    } else {
+      setWatchRules([])
+    }
+  }, [selectedSourceId])
 
   const loadSources = async () => {
     setLoadingSources(true)
@@ -193,6 +218,117 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
       console.error("Failed to remove source", e)
       push({ title: "Failed to remove source" })
     }
+  }
+
+  const loadWatchRules = async () => {
+    if (!selectedSourceId) return
+    setLoadingRules(true)
+    try {
+      const client = apiClient()
+      const res = await client.get(`/projects/${projectId}/cloudtrail/sources/${selectedSourceId}/watch-rules`)
+      if (res.data?.success) setWatchRules(res.data.data || [])
+    } catch (e) {
+      console.error("Failed to load watch rules", e)
+    } finally {
+      setLoadingRules(false)
+    }
+  }
+
+  const resetRuleForm = () => {
+    setRuleName("")
+    setRuleResourceId("")
+    setRuleEventNames("")
+    setRuleKeywords("")
+    setRuleRiskyOnly(false)
+    setRulePriorityOverride("")
+  }
+
+  const handleCreateRule = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!ruleName.trim()) {
+      return push({ title: "Validation Error", description: "Rule name is required" })
+    }
+    if (!ruleResourceId.trim() && !ruleEventNames.trim() && !ruleKeywords.trim() && !ruleRiskyOnly) {
+      return push({ title: "Validation Error", description: "Specify at least one match criterion" })
+    }
+    try {
+      const client = apiClient()
+      const res = await client.post(`/projects/${projectId}/cloudtrail/sources/${selectedSourceId}/watch-rules`, {
+        name: ruleName.trim(),
+        resource_id: ruleResourceId.trim() || undefined,
+        event_names: ruleEventNames.trim() || undefined,
+        keywords: ruleKeywords.trim() || undefined,
+        risky_only: ruleRiskyOnly,
+        priority_override: rulePriorityOverride || undefined,
+      })
+      if (res.data?.success) {
+        push({ title: "Watch rule created", description: "It will be checked automatically, or run it now." })
+        setIsRuleModalOpen(false)
+        resetRuleForm()
+        loadWatchRules()
+      }
+    } catch (e: any) {
+      console.error("Failed to create watch rule", e)
+      push({ title: "Failed to create rule", description: e?.response?.data?.error })
+    }
+  }
+
+  const handleToggleRule = async (rule: any) => {
+    try {
+      const client = apiClient()
+      const res = await client.put(
+        `/projects/${projectId}/cloudtrail/sources/${selectedSourceId}/watch-rules/${rule.id}`,
+        { enabled: !rule.enabled }
+      )
+      if (res.data?.success) loadWatchRules()
+    } catch (e) {
+      console.error("Failed to toggle rule", e)
+      push({ title: "Failed to update rule" })
+    }
+  }
+
+  const handleDeleteRule = async (ruleId: string) => {
+    if (!confirm("Delete this watch rule? It will stop creating tasks automatically.")) return
+    try {
+      const client = apiClient()
+      const res = await client.delete(`/projects/${projectId}/cloudtrail/sources/${selectedSourceId}/watch-rules/${ruleId}`)
+      if (res.data?.success) loadWatchRules()
+    } catch (e) {
+      console.error("Failed to delete rule", e)
+      push({ title: "Failed to delete rule" })
+    }
+  }
+
+  const handleCheckRuleNow = async (ruleId: string) => {
+    setCheckingRuleId(ruleId)
+    try {
+      const client = apiClient()
+      const res = await client.post(
+        `/projects/${projectId}/cloudtrail/sources/${selectedSourceId}/watch-rules/${ruleId}/check-now`
+      )
+      if (res.data?.success) {
+        const n = res.data.data.summary.new_tasks
+        push({
+          title: n > 0 ? `${n} new task${n === 1 ? "" : "s"} created` : "No new matches",
+          description: n > 0 ? "Added to the project's Planning tab." : "Nothing new since the last check.",
+        })
+        loadWatchRules()
+      }
+    } catch (e: any) {
+      console.error("Check now failed", e)
+      push({ title: "Check failed", description: e?.response?.data?.error })
+    } finally {
+      setCheckingRuleId("")
+    }
+  }
+
+  const ruleCriteriaSummary = (rule: any) => {
+    const parts: string[] = []
+    if (rule.resource_id) parts.push(`resource: ${rule.resource_id}`)
+    if (rule.event_names) parts.push(`events: ${rule.event_names}`)
+    if (rule.keywords) parts.push(`keywords: ${rule.keywords}`)
+    if (rule.risky_only) parts.push("risky only")
+    return parts.join(" · ")
   }
 
   const applyPreset = (days: number) => {
@@ -580,6 +716,89 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
         </div>
       )}
 
+      {/* Automatic Watch Rules */}
+      {selectedSourceId && (
+        <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h4 className="font-semibold flex items-center gap-2">
+                <Radar className="h-4 w-4 text-accent" />
+                Automatic Watch Rules
+              </h4>
+              <p className="text-xs text-muted-foreground mt-1">
+                Define a rule once — matching events automatically become a task. Checked in the
+                background every ~60s, or run "Check Now" any time.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                resetRuleForm()
+                setIsRuleModalOpen(true)
+              }}
+              className="rounded border border-accent text-accent px-3 py-1.5 text-sm hover:bg-accent/10 transition-colors flex items-center gap-1.5"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Rule
+            </button>
+          </div>
+
+          {loadingRules ? (
+            <div className="text-sm text-muted-foreground text-center py-4">Loading rules…</div>
+          ) : watchRules.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-4 border border-dashed border-border rounded">
+              No watch rules yet — e.g. "any change on sg-0a1b2c3d" or "any risky activity".
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {watchRules.map((rule: any) => (
+                <div
+                  key={rule.id}
+                  className={`flex items-center gap-3 p-3 rounded border ${
+                    rule.enabled ? "border-border bg-background" : "border-border/50 bg-secondary/5 opacity-60"
+                  }`}
+                >
+                  <button
+                    onClick={() => handleToggleRule(rule)}
+                    title={rule.enabled ? "Enabled — click to pause" : "Paused — click to enable"}
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                  >
+                    {rule.enabled ? <Power className="h-4 w-4 text-green-500" /> : <PowerOff className="h-4 w-4" />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{rule.name}</div>
+                    <div className="text-xs text-muted-foreground truncate font-mono">
+                      {ruleCriteriaSummary(rule) || "—"}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Clock className="h-3 w-3" />
+                      {rule.last_checked_at
+                        ? `Last checked ${new Date(rule.last_checked_at).toLocaleString()} — ${rule.last_match_count} new`
+                        : "Not checked yet"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleCheckRuleNow(rule.id)}
+                    disabled={checkingRuleId === rule.id || !rule.enabled}
+                    title={rule.enabled ? "Check now" : "Enable the rule to check it"}
+                    className="rounded border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-secondary/5 transition-colors disabled:opacity-50 inline-flex items-center gap-1 shrink-0"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${checkingRuleId === rule.id ? "animate-spin" : ""}`} />
+                    Check Now
+                  </button>
+                  <button
+                    onClick={() => handleDeleteRule(rule.id)}
+                    className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    title="Delete rule"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Add source modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
@@ -855,6 +1074,119 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                   className="rounded bg-accent text-accent-foreground px-4 py-2 hover:bg-accent/90 transition-colors text-sm font-medium"
                 >
                   Connect Source
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add watch rule modal */}
+      {isRuleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-card border border-border rounded-lg shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h4 className="text-lg font-bold flex items-center gap-2">
+                <Radar className="h-5 w-5 text-accent" />
+                Add Watch Rule
+              </h4>
+              <button
+                onClick={() => setIsRuleModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-secondary/5"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateRule} className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Rule Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Prod SG changes"
+                  value={ruleName}
+                  onChange={(e) => setRuleName(e.target.value)}
+                  className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Resource ID (optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. sg-0a1b2c3d — matches any event on this exact resource"
+                  value={ruleResourceId}
+                  onChange={(e) => setRuleResourceId(e.target.value)}
+                  className="w-full rounded border border-border bg-background px-3 py-2 text-sm font-mono"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Event Names (optional, comma-separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. AuthorizeSecurityGroupIngress,RevokeSecurityGroupIngress"
+                  value={ruleEventNames}
+                  onChange={(e) => setRuleEventNames(e.target.value)}
+                  className="w-full rounded border border-border bg-background px-3 py-2 text-sm font-mono"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Keywords (optional, comma-separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. bucket-policy,public"
+                  value={ruleKeywords}
+                  onChange={(e) => setRuleKeywords(e.target.value)}
+                  className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={ruleRiskyOnly}
+                    onChange={(e) => setRuleRiskyOnly(e.target.checked)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Risky events only
+                </label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Task priority</label>
+                  <select
+                    value={rulePriorityOverride}
+                    onChange={(e) => setRulePriorityOverride(e.target.value)}
+                    className="rounded border border-border bg-background px-2 py-1.5 text-sm"
+                  >
+                    <option value="">Auto (from risk)</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground leading-normal border-t border-border pt-3">
+                Specify at least one of Resource ID, Event Names, Keywords, or "Risky events only".
+                Matching is on resource ID / event name / keyword only — not resource tags.
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsRuleModalOpen(false)}
+                  className="rounded border border-border bg-background px-4 py-2 hover:bg-secondary/5 text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded bg-accent text-accent-foreground px-4 py-2 hover:bg-accent/90 transition-colors text-sm font-medium"
+                >
+                  Add Rule
                 </button>
               </div>
             </form>

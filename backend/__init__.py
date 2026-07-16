@@ -63,4 +63,16 @@ def create_app(config_name: str = "default") -> Flask:
 
     app.before_request(_ensure_db_initialized)
 
+    # Start the CloudTrail watch-rule scheduler. Skipped in tests (TestingConfig
+    # sets TESTING=True) so ad-hoc test scripts don't spin up background threads
+    # against a throwaway DB. The DB is initialized eagerly here (rather than
+    # waiting for the first HTTP request) since the scheduler's first tick can
+    # fire before any request ever arrives.
+    if not app.testing:
+        with app.app_context():
+            init_db(app)
+        app._backend_db_initialized = True
+        from backend.scheduler import start_cloudtrail_watch_scheduler
+        start_cloudtrail_watch_scheduler(app)
+
     return app

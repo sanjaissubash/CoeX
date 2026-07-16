@@ -20,6 +20,8 @@ import json
 import os
 from datetime import date, datetime, timedelta
 
+import boto3
+
 # Security-group related event names (ec2.amazonaws.com)
 SG_EVENTS = {
     "AuthorizeSecurityGroupIngress",
@@ -79,6 +81,36 @@ def _daterange(d_from, d_to):
     while d <= d_to:
         yield d
         d += timedelta(days=1)
+
+
+# --- AWS session (S3 sources only; read-only use) ---------------------------
+
+def build_aws_session(source):
+    """Build a boto3 Session for an S3 CloudTrail source (read-only use only).
+
+    Shared by the interactive /ask flow and the watch-rule scheduler, so both
+    paths authenticate identically.
+    """
+    if source.connection_method == "cross_account_role":
+        if not source.role_arn:
+            raise ValueError("role_arn is required for the cross_account_role connection method")
+        sts = boto3.client("sts")
+        assume_params = {"RoleArn": source.role_arn, "RoleSessionName": "CoeXCloudTrailSession"}
+        if source.external_id:
+            assume_params["ExternalId"] = source.external_id
+        assumed = sts.assume_role(**assume_params)
+        creds = assumed["Credentials"]
+        session = boto3.Session(
+            aws_access_key_id=creds["AccessKeyId"],
+            aws_secret_access_key=creds["SecretAccessKey"],
+            aws_session_token=creds["SessionToken"],
+        )
+    else:
+        session = boto3.Session()
+
+    # Fail fast with a clear error rather than a confusing downstream S3 error.
+    session.client("sts").get_caller_identity()
+    return session
 
 
 # --- Loading -----------------------------------------------------------------
@@ -308,11 +340,12 @@ _RISK_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFORMATIONAL":
 
 
 def filter_events(events, event_names=None, event_sources=None, username=None,
-                  keywords=None, risky_only=False, include_readonly=True):
+                  keywords=None, risky_only=False, include_readonly=True, resource_id=None):
     """Apply an intent filter to normalized events. All args are optional."""
     event_names = set(n for n in (event_names or []))
     event_sources = set(s for s in (event_sources or []))
     keywords = [k.lower() for k in (keywords or []) if k]
+    resource_id = (resource_id or "").strip().lower()
 
     out = []
     for e in events:
@@ -326,6 +359,8 @@ def filter_events(events, event_names=None, event_sources=None, username=None,
             continue
         if not include_readonly and e.get("read_only"):
             continue
+        if resource_id and resource_id not in (e.get("resource") or "").lower():
+            continue
         if keywords:
             blob = json.dumps(e, default=str).lower()
             if not any(k in blob for k in keywords):
@@ -334,6 +369,10 @@ def filter_events(events, event_names=None, event_sources=None, username=None,
 
     out.sort(key=lambda e: (_RISK_ORDER.get(e["risk"], 9), e.get("event_time") or ""))
     return out
+
+
+def parse_csv_list(s):
+    return [p.strip() for p in (s or "").split(",") if p.strip()]
 
 
 def distinct_usernames(events):
@@ -358,3 +397,44 @@ def events_to_csv(events):
     for e in events:
         writer.writerow({k: e.get(k, "") for k in CSV_COLUMNS})
     return buf.getvalue()
+
+
+# --- Task creation (shared by the manual "Create Task" button and watch rules) ----
+
+RISK_TO_PRIORITY = {
+    "CRITICAL": "critical",
+    "HIGH": "high",
+    "MEDIUM": "medium",
+    "LOW": "low",
+    "INFORMATIONAL": "low",
+}
+
+
+def build_task_fields(event, note=None, priority_override=None, title_prefix="Review"):
+    """Build {title, description, priority} for a Task from a normalized event."""
+    action = event.get("event_name", "activity")
+    resource = event.get("resource", "-")
+    when = (event.get("event_time") or "")[:19].replace("T", " ")
+    priority = priority_override or RISK_TO_PRIORITY.get((event.get("risk") or "").upper(), "medium")
+
+    description = (
+        f"CHANGE REVIEW — CloudTrail event\n\n"
+        f"Action: {action}\n"
+        f"Performed by: {event.get('username')} ({event.get('user_type')})\n"
+        f"When: {when} UTC\n"
+        f"Source IP: {event.get('source_ip')}\n"
+        f"Region: {event.get('aws_region')}\n"
+        f"Resource: {resource}\n"
+        f"Risk: {event.get('risk')} — {event.get('risk_reason')}\n"
+        f"Event ID: {event.get('event_id')}\n"
+    )
+    if event.get("error_code"):
+        description += f"Error: {event.get('error_code')}\n"
+    if note:
+        description += f"\n{note}\n"
+
+    return {
+        "title": f"{title_prefix}: {action} on {resource}",
+        "description": description,
+        "priority": priority,
+    }

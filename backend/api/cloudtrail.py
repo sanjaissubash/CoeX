@@ -11,7 +11,6 @@ about (defaulting to the last 7 days, capped at 31) — never a full-bucket scan
 """
 import os
 
-import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from flask import Response, jsonify, request
 
@@ -28,38 +27,6 @@ DEMO_LOCATION = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "storage", "cloudtrail", "demo",
 )
-
-_RISK_TO_PRIORITY = {
-    "CRITICAL": "critical",
-    "HIGH": "high",
-    "MEDIUM": "medium",
-    "LOW": "low",
-    "INFORMATIONAL": "low",
-}
-
-
-def _build_aws_session(source):
-    """Build a boto3 Session for an S3 CloudTrail source (read-only use only)."""
-    if source.connection_method == "cross_account_role":
-        if not source.role_arn:
-            raise ValueError("role_arn is required for the cross_account_role connection method")
-        sts = boto3.client("sts")
-        assume_params = {"RoleArn": source.role_arn, "RoleSessionName": "CoeXCloudTrailSession"}
-        if source.external_id:
-            assume_params["ExternalId"] = source.external_id
-        assumed = sts.assume_role(**assume_params)
-        creds = assumed["Credentials"]
-        session = boto3.Session(
-            aws_access_key_id=creds["AccessKeyId"],
-            aws_secret_access_key=creds["SecretAccessKey"],
-            aws_session_token=creds["SessionToken"],
-        )
-    else:
-        session = boto3.Session()
-
-    # Fail fast with a clear error rather than a confusing downstream S3 error.
-    session.client("sts").get_caller_identity()
-    return session
 
 
 @api_bp.route("/projects/<project_id>/cloudtrail/sources", methods=["GET"])
@@ -159,7 +126,7 @@ def _load_events_for_request(source, body):
     session = None
     if source.source_type == "s3":
         try:
-            session = _build_aws_session(source)
+            session = cts.build_aws_session(source)
         except (NoCredentialsError, ClientError, ValueError) as e:
             raise RuntimeError(f"AWS connection failed: {e}") from e
 
@@ -280,34 +247,10 @@ def create_task_from_event(project_id):
     if not event:
         return jsonify({"success": False, "error": "event is required"}), 400
 
-    action = event.get("event_name", "activity")
-    resource = event.get("resource", "-")
-    when = (event.get("event_time") or "")[:19].replace("T", " ")
-    priority = _RISK_TO_PRIORITY.get((event.get("risk") or "").upper(), "medium")
-
-    description = (
-        f"CHANGE REVIEW — CloudTrail event\n\n"
-        f"Action: {action}\n"
-        f"Performed by: {event.get('username')} ({event.get('user_type')})\n"
-        f"When: {when} UTC\n"
-        f"Source IP: {event.get('source_ip')}\n"
-        f"Region: {event.get('aws_region')}\n"
-        f"Resource: {resource}\n"
-        f"Risk: {event.get('risk')} — {event.get('risk_reason')}\n"
-        f"Event ID: {event.get('event_id')}\n"
+    fields = cts.build_task_fields(
+        event, note=f"Follow-up question / note:\n{note}" if note else None
     )
-    if event.get("error_code"):
-        description += f"Error: {event.get('error_code')}\n"
-    if note:
-        description += f"\nFollow-up question / note:\n{note}\n"
-
-    task = Task(
-        project_id=project_id,
-        title=f"Review: {action} on {resource}",
-        description=description,
-        priority=priority,
-        status="open",
-    )
+    task = Task(project_id=project_id, status="open", **fields)
     db.session.add(task)
     db.session.flush()
 
