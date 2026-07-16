@@ -47,5 +47,24 @@ def init_db(app=None):
                     conn.execute(text("ALTER TABLE assets ADD COLUMN folder_id INTEGER"))
                     conn.commit()
                     print('✅ assets.folder_id added')
+
+            res = conn.execute(text("""
+                SELECT name FROM sqlite_master WHERE type='table' AND name='cloudtrail_sources'
+            """))
+            if res.fetchone():
+                cols = conn.execute(text("PRAGMA table_info('cloudtrail_sources')")).fetchall()
+                col_names = [c[1] for c in cols]
+                new_cols = {
+                    'regions': "TEXT DEFAULT 'us-east-1'",
+                    'connection_method': "TEXT DEFAULT 'local_role'",
+                    'role_arn': "TEXT",
+                    'external_id': "TEXT",
+                }
+                for col, ddl in new_cols.items():
+                    if col not in col_names:
+                        print(f'Adding missing column cloudtrail_sources.{col}')
+                        conn.execute(text(f"ALTER TABLE cloudtrail_sources ADD COLUMN {col} {ddl}"))
+                        conn.commit()
+                        print(f'✅ cloudtrail_sources.{col} added')
     except Exception as e:
         print('DB migration check failed:', e)

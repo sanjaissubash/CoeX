@@ -31,5 +31,6 @@ from backend.api import context_generator
 from backend.api import tasks
 from backend.api import compliance
 from backend.api import audit
+from backend.api import cloudtrail
 
 __all__ = ["api_bp"]
