@@ -130,7 +130,10 @@ def sync_compliance_findings(project_id, account_id):
         # Load realistic mock compliance alerts
         findings = _generate_mock_findings(account.id, regions)
     else:
-        # Fetch actual findings from AWS Inspector, GuardDuty, and Security Hub
+        # Fetch actual findings from AWS Inspector, GuardDuty, and Security Hub.
+        # All AWS operations here are read-only.
+        # Unless using cross-account role, the only AWS write-like call is STS assume_role,
+        # which is used to obtain temporary credentials, not to modify AWS resources.
         try:
             for region in regions:
                 findings.extend(_fetch_actual_securityhub_findings(session, account.id, region))
@@ -345,8 +348,7 @@ def _fetch_actual_guardduty_findings(session, compliance_account_id, region):
             DetectorId=detector_id,
             FindingCriteria={
                 'Criterion': {
-                    'service.archived': {'Eq': ['false']},
-                    'severity': {'Gte': ['5.0']} # High/Medium severity alerts
+                    'service.archived': {'Eq': ['false']}
                 }
             },
             MaxResults=20
@@ -360,12 +362,21 @@ def _fetch_actual_guardduty_findings(session, compliance_account_id, region):
             resource = item.get("Resource", {})
             res_id = resource.get("InstanceDetails", {}).get("InstanceId") or resource.get("AccessKeyDetails", {}).get("AccessKeyId") or "Unknown"
             res_type = resource.get("ResourceType", "Unknown").lower()
+            severity_value = float(item.get("Severity", 0) or 0)
+            if severity_value >= 7.0:
+                severity_label = "CRITICAL"
+            elif severity_value >= 4.0:
+                severity_label = "HIGH"
+            elif severity_value >= 1.0:
+                severity_label = "MEDIUM"
+            else:
+                severity_label = "LOW"
 
             findings.append({
                 "finding_id": item.get("Id"),
                 "title": item.get("Title"),
                 "description": item.get("Description"),
-                "severity": "CRITICAL" if item.get("Severity", 0) >= 7.0 else "HIGH",
+                "severity": severity_label,
                 "resource_id": res_id,
                 "resource_type": res_type,
                 "region": region,
