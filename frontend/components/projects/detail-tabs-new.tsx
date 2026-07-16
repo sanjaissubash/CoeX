@@ -10,6 +10,7 @@ import { DecisionsSection } from "@/components/projects/sections/decisions-secti
 import { NotesSection } from "@/components/projects/sections/notes-section"
 import { ResearchSection } from "@/components/projects/sections/research-section"
 import { ComplianceSection } from "@/components/projects/sections/compliance-section"
+import { AuditSection } from "@/components/projects/sections/audit-section"
 import { TasksSection } from "@/components/projects/sections/tasks-section"
 
 interface DetailTabsProps {
@@ -22,6 +23,7 @@ const tabs = [
   { id: "knowledge", label: "Knowledge" },
   { id: "assets", label: "Assets" },
   { id: "compliance", label: "Compliance" },
+  { id: "audit", label: "Audit" },
 ]
 
 function OverviewPane({ projectId }: { projectId: string }) {
@@ -141,6 +143,10 @@ export function ProjectDetailTabs({ projectId }: DetailTabsProps) {
 
         {activeTab === "compliance" && (
           <ComplianceSection projectId={projectId} />
+        )}
+
+        {activeTab === "audit" && (
+          <AuditSection projectId={projectId} />
         )}
       </div>
     </div>

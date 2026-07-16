@@ -30,5 +30,6 @@ from backend.api import (
 from backend.api import context_generator
 from backend.api import tasks
 from backend.api import compliance
+from backend.api import audit
 
 __all__ = ["api_bp"]
