@@ -115,6 +115,9 @@ def delete_watch_rule(project_id, source_id, rule_id):
     Project.query.get_or_404(project_id)
     rule = CloudTrailWatchRule.query.filter_by(id=rule_id, source_id=source_id, project_id=project_id).first_or_404()
     CloudTrailRuleMatch.query.filter_by(rule_id=rule.id).delete()
+    # Tasks already created by this rule (and their CloudTrail-origin tag) survive the
+    # rule's deletion — CloudTrailTaskLink.rule_id is intentionally left pointing at it
+    # (rule_name lookups already tolerate a missing rule) so "origin: auto" stays correct.
     db.session.delete(rule)
     db.session.commit()
     return jsonify({"success": True, "message": "Watch rule removed"})

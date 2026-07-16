@@ -18,6 +18,8 @@ from backend.api import api_bp
 from backend.database import db
 from backend.models import Project, Task
 from backend.models.cloudtrail_source import CloudTrailSource
+from backend.models.cloudtrail_task_link import CloudTrailTaskLink
+from backend.models.cloudtrail_watch_rule import CloudTrailWatchRule
 from backend.services import cloudtrail_service as cts
 from backend.services import ollama_service as ai
 from backend.services.activity_service import ActivityService
@@ -243,9 +245,13 @@ def create_task_from_event(project_id):
     body = request.get_json(silent=True) or {}
     event = body.get("event") or {}
     note = (body.get("note") or "").strip()
+    source_id = body.get("source_id")
 
     if not event:
         return jsonify({"success": False, "error": "event is required"}), 400
+    if not source_id:
+        return jsonify({"success": False, "error": "source_id is required"}), 400
+    CloudTrailSource.query.filter_by(id=source_id, project_id=project_id).first_or_404()
 
     fields = cts.build_task_fields(
         event, note=f"Follow-up question / note:\n{note}" if note else None
@@ -253,6 +259,10 @@ def create_task_from_event(project_id):
     task = Task(project_id=project_id, status="open", **fields)
     db.session.add(task)
     db.session.flush()
+
+    db.session.add(CloudTrailTaskLink(
+        project_id=project_id, source_id=source_id, task_id=task.id, event_id=event.get("event_id"),
+    ))
 
     ActivityService.log_action(
         project_id=project_id,
@@ -263,3 +273,45 @@ def create_task_from_event(project_id):
     )
     db.session.commit()
     return jsonify({"success": True, "data": task.to_dict()}), 201
+
+
+@api_bp.route("/projects/<project_id>/cloudtrail/tasks", methods=["GET"])
+def list_cloudtrail_tasks(project_id):
+    """All tasks created from CloudTrail (manual clicks + auto watch-rule
+    matches) for this project — kept out of the generic Planning list so
+    they're easy to sort/triage in one place.
+    """
+    Project.query.get_or_404(project_id)
+    source_id = request.args.get("source_id")
+    status = request.args.get("status")
+    origin = request.args.get("origin")  # "manual" | "auto"
+
+    query = CloudTrailTaskLink.query.filter_by(project_id=project_id)
+    if source_id:
+        query = query.filter_by(source_id=source_id)
+    if origin == "manual":
+        query = query.filter(CloudTrailTaskLink.rule_id.is_(None))
+    elif origin == "auto":
+        query = query.filter(CloudTrailTaskLink.rule_id.isnot(None))
+
+    links = query.order_by(CloudTrailTaskLink.created_at.desc()).all()
+
+    rule_names = {
+        r.id: r.name for r in CloudTrailWatchRule.query.filter(
+            CloudTrailWatchRule.id.in_([l.rule_id for l in links if l.rule_id])
+        ).all()
+    } if links else {}
+
+    out = []
+    for link in links:
+        task = Task.query.get(link.task_id)
+        if not task:
+            continue
+        if status and task.status != status:
+            continue
+        item = link.to_dict()
+        item["task"] = task.to_dict()
+        item["rule_name"] = rule_names.get(link.rule_id)
+        out.append(item)
+
+    return jsonify({"success": True, "data": out})

@@ -26,6 +26,11 @@ import {
   PowerOff,
   Clock,
   RefreshCw,
+  CheckSquare,
+  Square,
+  Bot,
+  User,
+  ListChecks,
 } from "lucide-react"
 
 interface CloudTrailSectionProps {
@@ -106,6 +111,13 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
   const [ruleRiskyOnly, setRuleRiskyOnly] = useState<boolean>(false)
   const [rulePriorityOverride, setRulePriorityOverride] = useState<string>("")
 
+  // CloudTrail Tasks (tasks created from this feature, kept separate from Planning)
+  const [ctTasks, setCtTasks] = useState<any[]>([])
+  const [loadingCtTasks, setLoadingCtTasks] = useState<boolean>(false)
+  const [ctStatusFilter, setCtStatusFilter] = useState<string>("")
+  const [ctOriginFilter, setCtOriginFilter] = useState<string>("")
+  const [updatingCtTaskId, setUpdatingCtTaskId] = useState<string>("")
+
   useEffect(() => {
     loadSources()
   }, [projectId])
@@ -113,10 +125,16 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
   useEffect(() => {
     if (selectedSourceId) {
       loadWatchRules()
+      loadCloudTrailTasks()
     } else {
       setWatchRules([])
+      setCtTasks([])
     }
   }, [selectedSourceId])
+
+  useEffect(() => {
+    if (selectedSourceId) loadCloudTrailTasks()
+  }, [ctStatusFilter, ctOriginFilter])
 
   const loadSources = async () => {
     setLoadingSources(true)
@@ -310,9 +328,10 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
         const n = res.data.data.summary.new_tasks
         push({
           title: n > 0 ? `${n} new task${n === 1 ? "" : "s"} created` : "No new matches",
-          description: n > 0 ? "Added to the project's Planning tab." : "Nothing new since the last check.",
+          description: n > 0 ? "Added to CloudTrail Tasks below." : "Nothing new since the last check.",
         })
         loadWatchRules()
+        loadCloudTrailTasks()
       }
     } catch (e: any) {
       console.error("Check now failed", e)
@@ -329,6 +348,50 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
     if (rule.keywords) parts.push(`keywords: ${rule.keywords}`)
     if (rule.risky_only) parts.push("risky only")
     return parts.join(" · ")
+  }
+
+  const loadCloudTrailTasks = async () => {
+    if (!selectedSourceId) return
+    setLoadingCtTasks(true)
+    try {
+      const client = apiClient()
+      let url = `/projects/${projectId}/cloudtrail/tasks?source_id=${selectedSourceId}`
+      if (ctStatusFilter) url += `&status=${ctStatusFilter}`
+      if (ctOriginFilter) url += `&origin=${ctOriginFilter}`
+      const res = await client.get(url)
+      if (res.data?.success) setCtTasks(res.data.data || [])
+    } catch (e) {
+      console.error("Failed to load CloudTrail tasks", e)
+    } finally {
+      setLoadingCtTasks(false)
+    }
+  }
+
+  const toggleCtTaskDone = async (link: any) => {
+    const isDone = link.task.status === "completed"
+    setUpdatingCtTaskId(link.task.id)
+    try {
+      const client = apiClient()
+      const res = await client.put(`/tasks/${link.task.id}`, { status: isDone ? "open" : "completed" })
+      if (res.data?.success) loadCloudTrailTasks()
+    } catch (e) {
+      console.error("Failed to update task", e)
+      push({ title: "Failed to update task" })
+    } finally {
+      setUpdatingCtTaskId("")
+    }
+  }
+
+  const deleteCtTask = async (taskId: string) => {
+    if (!confirm("Delete this task?")) return
+    try {
+      const client = apiClient()
+      const res = await client.delete(`/tasks/${taskId}`)
+      if (res.data?.success) loadCloudTrailTasks()
+    } catch (e) {
+      console.error("Failed to delete task", e)
+      push({ title: "Failed to delete task" })
+    }
   }
 
   const applyPreset = (days: number) => {
@@ -383,10 +446,12 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
       const client = apiClient()
       const res = await client.post(`/projects/${projectId}/cloudtrail/create-task`, {
         event,
+        source_id: selectedSourceId,
         note: `What was the purpose of this change? (${event.event_name} by ${event.username})`,
       })
       if (res.data?.success) {
-        push({ title: "Task created", description: "Added to the project's Planning tab for review." })
+        push({ title: "Task created", description: "Added to CloudTrail Tasks below." })
+        loadCloudTrailTasks()
       }
     } catch (e) {
       console.error("Create task failed", e)
@@ -794,6 +859,99 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CloudTrail Tasks — kept separate from the project's general Planning tasks */}
+      {selectedSourceId && (
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="flex items-center justify-between flex-wrap gap-3 p-4 border-b border-border">
+            <div>
+              <h4 className="font-semibold flex items-center gap-2">
+                <ListChecks className="h-4 w-4 text-accent" />
+                CloudTrail Tasks
+              </h4>
+              <p className="text-xs text-muted-foreground mt-1">
+                Tasks created from this source — manually or by a watch rule — separate from the
+                project's general Planning tasks so they're easy to triage.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={ctStatusFilter}
+                onChange={(e) => setCtStatusFilter(e.target.value)}
+                className="rounded border border-border bg-background px-2 py-1 text-xs"
+              >
+                <option value="">All statuses</option>
+                <option value="open">Open</option>
+                <option value="in_progress">In progress</option>
+                <option value="completed">Completed</option>
+              </select>
+              <select
+                value={ctOriginFilter}
+                onChange={(e) => setCtOriginFilter(e.target.value)}
+                className="rounded border border-border bg-background px-2 py-1 text-xs"
+              >
+                <option value="">All origins</option>
+                <option value="manual">Manual</option>
+                <option value="auto">Auto (watch rule)</option>
+              </select>
+            </div>
+          </div>
+
+          {loadingCtTasks ? (
+            <div className="text-sm text-muted-foreground text-center py-6">Loading tasks…</div>
+          ) : ctTasks.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-6">
+              No CloudTrail tasks yet. Create one from a matched event above, or add a watch rule.
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {ctTasks.map((link: any) => {
+                const task = link.task
+                const isDone = task.status === "completed"
+                return (
+                  <div key={link.id} className="flex items-start gap-3 p-3 hover:bg-secondary/5">
+                    <button
+                      onClick={() => toggleCtTaskDone(link)}
+                      disabled={updatingCtTaskId === task.id}
+                      className="mt-0.5 text-muted-foreground hover:text-foreground disabled:opacity-50 shrink-0"
+                      title={isDone ? "Mark as open" : "Mark as done"}
+                    >
+                      {isDone ? <CheckSquare className="h-4 w-4 text-green-500" /> : <Square className="h-4 w-4" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-medium text-sm truncate ${isDone ? "line-through text-muted-foreground" : ""}`}>
+                        {task.title}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${riskClasses(
+                          task.priority === "critical" ? "CRITICAL" : task.priority === "high" ? "HIGH" :
+                          task.priority === "medium" ? "MEDIUM" : "LOW"
+                        )}`}>
+                          {task.priority}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          {link.origin === "auto" ? <Bot className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                          {link.origin === "auto" ? `Auto: ${link.rule_name || "rule deleted"}` : "Manual"}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {new Date(link.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteCtTask(task.id)}
+                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      title="Delete task"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

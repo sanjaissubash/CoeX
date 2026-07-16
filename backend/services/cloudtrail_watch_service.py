@@ -19,6 +19,7 @@ from backend.database import db
 from backend.models import Task
 from backend.models.cloudtrail_rule_match import CloudTrailRuleMatch
 from backend.models.cloudtrail_source import CloudTrailSource
+from backend.models.cloudtrail_task_link import CloudTrailTaskLink
 from backend.models.cloudtrail_watch_rule import CloudTrailWatchRule
 from backend.services import cloudtrail_service as cts
 from backend.services.activity_service import ActivityService
@@ -93,6 +94,10 @@ def _evaluate_rule(rule, events_by_source):
         db.session.flush()
 
         db.session.add(CloudTrailRuleMatch(rule_id=rule.id, event_id=ev["event_id"], task_id=task.id))
+        db.session.add(CloudTrailTaskLink(
+            project_id=rule.project_id, source_id=rule.source_id, task_id=task.id,
+            event_id=ev["event_id"], rule_id=rule.id,
+        ))
 
         ActivityService.log_action(
             project_id=rule.project_id,
