@@ -31,6 +31,7 @@ import {
   Bot,
   User,
   ListChecks,
+  Pencil,
 } from "lucide-react"
 
 interface CloudTrailSectionProps {
@@ -103,6 +104,7 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
   const [watchRules, setWatchRules] = useState<any[]>([])
   const [loadingRules, setLoadingRules] = useState<boolean>(false)
   const [isRuleModalOpen, setIsRuleModalOpen] = useState<boolean>(false)
+  const [editingRuleId, setEditingRuleId] = useState<string>("")  // "" = creating a new rule
   const [checkingRuleId, setCheckingRuleId] = useState<string>("")
   const [ruleName, setRuleName] = useState<string>("")
   const [ruleResourceId, setRuleResourceId] = useState<string>("")
@@ -110,6 +112,7 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
   const [ruleKeywords, setRuleKeywords] = useState<string>("")
   const [ruleRiskyOnly, setRuleRiskyOnly] = useState<boolean>(false)
   const [rulePriorityOverride, setRulePriorityOverride] = useState<string>("")
+  const [ruleCheckInterval, setRuleCheckInterval] = useState<number>(300)
 
   // CloudTrail Tasks (tasks created from this feature, kept separate from Planning)
   const [ctTasks, setCtTasks] = useState<any[]>([])
@@ -253,15 +256,29 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
   }
 
   const resetRuleForm = () => {
+    setEditingRuleId("")
     setRuleName("")
     setRuleResourceId("")
     setRuleEventNames("")
     setRuleKeywords("")
     setRuleRiskyOnly(false)
     setRulePriorityOverride("")
+    setRuleCheckInterval(300)
   }
 
-  const handleCreateRule = async (e: React.FormEvent) => {
+  const openEditRule = (rule: any) => {
+    setEditingRuleId(rule.id)
+    setRuleName(rule.name || "")
+    setRuleResourceId(rule.resource_id || "")
+    setRuleEventNames(rule.event_names || "")
+    setRuleKeywords(rule.keywords || "")
+    setRuleRiskyOnly(!!rule.risky_only)
+    setRulePriorityOverride(rule.priority_override || "")
+    setRuleCheckInterval(rule.check_interval_seconds || 300)
+    setIsRuleModalOpen(true)
+  }
+
+  const handleSubmitRule = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!ruleName.trim()) {
       return push({ title: "Validation Error", description: "Rule name is required" })
@@ -269,25 +286,32 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
     if (!ruleResourceId.trim() && !ruleEventNames.trim() && !ruleKeywords.trim() && !ruleRiskyOnly) {
       return push({ title: "Validation Error", description: "Specify at least one match criterion" })
     }
+    const payload = {
+      name: ruleName.trim(),
+      resource_id: ruleResourceId.trim() || undefined,
+      event_names: ruleEventNames.trim() || undefined,
+      keywords: ruleKeywords.trim() || undefined,
+      risky_only: ruleRiskyOnly,
+      priority_override: rulePriorityOverride || undefined,
+      check_interval_seconds: ruleCheckInterval,
+    }
     try {
       const client = apiClient()
-      const res = await client.post(`/projects/${projectId}/cloudtrail/sources/${selectedSourceId}/watch-rules`, {
-        name: ruleName.trim(),
-        resource_id: ruleResourceId.trim() || undefined,
-        event_names: ruleEventNames.trim() || undefined,
-        keywords: ruleKeywords.trim() || undefined,
-        risky_only: ruleRiskyOnly,
-        priority_override: rulePriorityOverride || undefined,
-      })
+      const res = editingRuleId
+        ? await client.put(`/projects/${projectId}/cloudtrail/sources/${selectedSourceId}/watch-rules/${editingRuleId}`, payload)
+        : await client.post(`/projects/${projectId}/cloudtrail/sources/${selectedSourceId}/watch-rules`, payload)
       if (res.data?.success) {
-        push({ title: "Watch rule created", description: "It will be checked automatically, or run it now." })
+        push({
+          title: editingRuleId ? "Watch rule updated" : "Watch rule created",
+          description: "It will be checked automatically, or run it now.",
+        })
         setIsRuleModalOpen(false)
         resetRuleForm()
         loadWatchRules()
       }
     } catch (e: any) {
-      console.error("Failed to create watch rule", e)
-      push({ title: "Failed to create rule", description: e?.response?.data?.error })
+      console.error("Failed to save watch rule", e)
+      push({ title: editingRuleId ? "Failed to update rule" : "Failed to create rule", description: e?.response?.data?.error })
     }
   }
 
@@ -339,6 +363,13 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
     } finally {
       setCheckingRuleId("")
     }
+  }
+
+  const formatInterval = (seconds: number) => {
+    if (!seconds || seconds < 60) return "1 min"
+    if (seconds < 3600) return `${Math.round(seconds / 60)} min`
+    if (seconds < 86400) return `${Math.round(seconds / 3600)} hr`
+    return `${Math.round(seconds / 86400)} day${seconds >= 172800 ? "s" : ""}`
   }
 
   const ruleCriteriaSummary = (rule: any) => {
@@ -839,6 +870,8 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                       {rule.last_checked_at
                         ? `Last checked ${new Date(rule.last_checked_at).toLocaleString()} — ${rule.last_match_count} new`
                         : "Not checked yet"}
+                      <span className="mx-1">·</span>
+                      every {formatInterval(rule.check_interval_seconds)}
                     </div>
                   </div>
                   <button
@@ -849,6 +882,13 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${checkingRuleId === rule.id ? "animate-spin" : ""}`} />
                     Check Now
+                  </button>
+                  <button
+                    onClick={() => openEditRule(rule)}
+                    className="p-1.5 rounded hover:bg-secondary/10 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    title="Edit rule"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => handleDeleteRule(rule.id)}
@@ -1246,7 +1286,7 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h4 className="text-lg font-bold flex items-center gap-2">
                 <Radar className="h-5 w-5 text-accent" />
-                Add Watch Rule
+                {editingRuleId ? "Edit Watch Rule" : "Add Watch Rule"}
               </h4>
               <button
                 onClick={() => setIsRuleModalOpen(false)}
@@ -1255,7 +1295,7 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form onSubmit={handleCreateRule} className="p-6 space-y-4">
+            <form onSubmit={handleSubmitRule} className="p-6 space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Rule Name</label>
                 <input
@@ -1327,6 +1367,27 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                 </div>
               </div>
 
+              <div className="flex items-center justify-between gap-4">
+                <label className="text-sm font-medium">Check every</label>
+                <select
+                  value={ruleCheckInterval}
+                  onChange={(e) => setRuleCheckInterval(Number(e.target.value))}
+                  className="rounded border border-border bg-background px-2 py-1.5 text-sm"
+                >
+                  <option value={60}>1 minute</option>
+                  <option value={300}>5 minutes</option>
+                  <option value={900}>15 minutes</option>
+                  <option value={3600}>1 hour</option>
+                  <option value={21600}>6 hours</option>
+                  <option value={86400}>Daily</option>
+                </select>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-normal">
+                This is a floor, not a guarantee — the background check itself runs about once a
+                minute, so an interval shorter than that has no extra effect. "Check Now" always runs
+                immediately regardless of this setting.
+              </p>
+
               <p className="text-[11px] text-muted-foreground leading-normal border-t border-border pt-3">
                 Specify at least one of Resource ID, Event Names, Keywords, or "Risky events only".
                 Matching is on resource ID / event name / keyword only — not resource tags.
@@ -1344,7 +1405,7 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                   type="submit"
                   className="rounded bg-accent text-accent-foreground px-4 py-2 hover:bg-accent/90 transition-colors text-sm font-medium"
                 >
-                  Add Rule
+                  {editingRuleId ? "Save Changes" : "Add Rule"}
                 </button>
               </div>
             </form>

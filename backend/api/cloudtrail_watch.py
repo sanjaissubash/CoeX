@@ -23,6 +23,28 @@ from backend.services import cloudtrail_watch_service as watch_service
 from backend.services.activity_service import ActivityService
 
 _VALID_PRIORITIES = {"critical", "high", "medium", "low"}
+MIN_CHECK_INTERVAL_SECONDS = 60  # can't be finer than the scheduler's own tick
+
+
+def _parse_check_interval(body):
+    """Returns (value, error). value is None only when the key is absent from
+    the request body (caller should leave the field untouched / use the model
+    default); an explicit null/blank means "reset to the default" and resolves
+    to that default value rather than None.
+    """
+    if "check_interval_seconds" not in body:
+        return None, None
+    raw = body.get("check_interval_seconds")
+    if raw is None or raw == "":
+        from backend.services.cloudtrail_watch_service import DEFAULT_CHECK_INTERVAL_SECONDS
+        return DEFAULT_CHECK_INTERVAL_SECONDS, None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None, "check_interval_seconds must be an integer number of seconds"
+    if value < MIN_CHECK_INTERVAL_SECONDS:
+        return None, f"check_interval_seconds must be at least {MIN_CHECK_INTERVAL_SECONDS}"
+    return value, None
 
 
 @api_bp.route("/projects/<project_id>/cloudtrail/sources/<source_id>/watch-rules", methods=["GET"])
@@ -47,6 +69,7 @@ def create_watch_rule(project_id, source_id):
     keywords = (body.get("keywords") or "").strip() or None
     risky_only = bool(body.get("risky_only", False))
     priority_override = (body.get("priority_override") or "").strip().lower() or None
+    check_interval_seconds, interval_error = _parse_check_interval(body)
 
     if not name:
         return jsonify({"success": False, "error": "name is required"}), 400
@@ -55,6 +78,8 @@ def create_watch_rule(project_id, source_id):
                                                     "(resource ID, event names, keywords, or risky-only)"}), 400
     if priority_override and priority_override not in _VALID_PRIORITIES:
         return jsonify({"success": False, "error": f"priority_override must be one of {sorted(_VALID_PRIORITIES)}"}), 400
+    if interval_error:
+        return jsonify({"success": False, "error": interval_error}), 400
 
     rule = CloudTrailWatchRule(
         project_id=project_id,
@@ -65,6 +90,7 @@ def create_watch_rule(project_id, source_id):
         keywords=keywords,
         risky_only=risky_only,
         priority_override=priority_override,
+        **({"check_interval_seconds": check_interval_seconds} if check_interval_seconds is not None else {}),
     )
     db.session.add(rule)
     db.session.commit()
@@ -102,6 +128,11 @@ def update_watch_rule(project_id, source_id, rule_id):
         rule.priority_override = p
     if "enabled" in body:
         rule.enabled = bool(body.get("enabled"))
+    if "check_interval_seconds" in body:
+        value, error = _parse_check_interval(body)
+        if error:
+            return jsonify({"success": False, "error": error}), 400
+        rule.check_interval_seconds = value
 
     if not any([rule.resource_id, rule.event_names, rule.keywords, rule.risky_only]):
         return jsonify({"success": False, "error": "Rule must keep at least one match criterion"}), 400

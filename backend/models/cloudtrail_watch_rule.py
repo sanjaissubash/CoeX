@@ -28,6 +28,12 @@ class CloudTrailWatchRule(db.Model):
     priority_override = db.Column(db.String(20))  # critical/high/medium/low; null = derive from the event's risk
     enabled = db.Column(db.Boolean, default=True)
 
+    # How often THIS rule is actually evaluated. The scheduler still ticks globally every
+    # ~60s (backend/scheduler.py), but each tick only evaluates a rule once this many
+    # seconds have passed since its last_checked_at — so this is a floor, not a guarantee
+    # of that exact cadence, and can't be finer than the global tick interval.
+    check_interval_seconds = db.Column(db.Integer, default=300)
+
     last_checked_at = db.Column(db.DateTime)
     last_match_count = db.Column(db.Integer, default=0)
 
@@ -46,6 +52,7 @@ class CloudTrailWatchRule(db.Model):
             "risky_only": self.risky_only,
             "priority_override": self.priority_override,
             "enabled": self.enabled,
+            "check_interval_seconds": self.check_interval_seconds,
             "last_checked_at": self.last_checked_at.isoformat() if self.last_checked_at else None,
             "last_match_count": self.last_match_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,

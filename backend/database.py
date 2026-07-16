@@ -31,40 +31,36 @@ def init_db(app=None):
         db.create_all()
     print("✅ Database tables created")
 
-    # Runtime migration: if the assets table exists but lacks folder_id column,
-    # add it. This keeps local development simple without requiring Alembic.
+    # Runtime migration: add any columns a table is missing (added to a model after
+    # the table already existed on disk). Keeps local development simple without
+    # requiring Alembic; db.create_all() only creates new tables, never alters existing ones.
+    def _add_missing_columns(conn, table, new_cols):
+        res = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=:t"
+        ), {"t": table})
+        if not res.fetchone():
+            return
+        cols = conn.execute(text(f"PRAGMA table_info('{table}')")).fetchall()
+        col_names = [c[1] for c in cols]
+        for col, ddl in new_cols.items():
+            if col not in col_names:
+                print(f'Adding missing column {table}.{col}')
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
+                conn.commit()
+                print(f'✅ {table}.{col} added')
+
     try:
         engine = db.engine
         with engine.connect() as conn:
-            res = conn.execute(text("""
-                SELECT name FROM sqlite_master WHERE type='table' AND name='assets'
-            """))
-            if res.fetchone():
-                cols = conn.execute(text("PRAGMA table_info('assets')")).fetchall()
-                col_names = [c[1] for c in cols]
-                if 'folder_id' not in col_names:
-                    print('Adding missing column assets.folder_id')
-                    conn.execute(text("ALTER TABLE assets ADD COLUMN folder_id INTEGER"))
-                    conn.commit()
-                    print('✅ assets.folder_id added')
-
-            res = conn.execute(text("""
-                SELECT name FROM sqlite_master WHERE type='table' AND name='cloudtrail_sources'
-            """))
-            if res.fetchone():
-                cols = conn.execute(text("PRAGMA table_info('cloudtrail_sources')")).fetchall()
-                col_names = [c[1] for c in cols]
-                new_cols = {
-                    'regions': "TEXT DEFAULT 'us-east-1'",
-                    'connection_method': "TEXT DEFAULT 'local_role'",
-                    'role_arn': "TEXT",
-                    'external_id': "TEXT",
-                }
-                for col, ddl in new_cols.items():
-                    if col not in col_names:
-                        print(f'Adding missing column cloudtrail_sources.{col}')
-                        conn.execute(text(f"ALTER TABLE cloudtrail_sources ADD COLUMN {col} {ddl}"))
-                        conn.commit()
-                        print(f'✅ cloudtrail_sources.{col} added')
+            _add_missing_columns(conn, 'assets', {'folder_id': 'INTEGER'})
+            _add_missing_columns(conn, 'cloudtrail_sources', {
+                'regions': "TEXT DEFAULT 'us-east-1'",
+                'connection_method': "TEXT DEFAULT 'local_role'",
+                'role_arn': "TEXT",
+                'external_id': "TEXT",
+            })
+            _add_missing_columns(conn, 'cloudtrail_watch_rules', {
+                'check_interval_seconds': "INTEGER DEFAULT 300",
+            })
     except Exception as e:
         print('DB migration check failed:', e)
