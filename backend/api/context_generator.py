@@ -312,3 +312,92 @@ def generate_task_context(task_id):
         current_app.logger.exception("Error generating context for task %s", task_id)
         db.session.rollback()
         return jsonify({"success": False, "error": "internal", "message": "see server logs"}), 500
+
+
+@api_bp.route("/context/verify-ollama", methods=["POST"])
+def verify_context_ollama():
+    try:
+
+        data = request.get_json() or {}
+        text = data.get("text", "")
+        if not text:
+            return jsonify({"success": True, "findings": []})
+
+        import requests
+        import json
+
+        # Dynamic model selection
+        active_model = "qwen2.5:3b"
+        try:
+            list_res = requests.get("http://localhost:11434/api/tags", timeout=1.5)
+            if list_res.status_code == 200:
+                models_list = list_res.json().get("models", [])
+                names = [m.get("name") for m in models_list]
+                if names and active_model not in names and "qwen2.5:3b" not in names:
+                    # Look for any pulled model containing instructions or names
+                    matched = [n for n in names if any(k in n.lower() for k in ["qwen", "phi", "llama", "mistral", "gemma"])]
+                    active_model = matched[0] if matched else names[0]
+        except Exception:
+            pass
+
+        system_prompt = (
+            "You are a strict security scanner. Scan the user context input for any sensitive credentials, AWS keys, secret tokens, private keys, database connection strings, passwords, or company confidential terms.\n"
+            "Return a JSON array of findings. Each object in the array must contain:\n"
+            "- \"label\": (string, e.g. \"AWS access key\")\n"
+            "- \"severity\": (string, either \"high\" or \"medium\")\n"
+            "- \"match\": (string, the exact matched characters to redact)\n"
+            "- \"recommendation\": (string, fix description)\n"
+            "Return ONLY the valid JSON array. Do not include markdown code block syntax (like ```json), intro text, or extra descriptions."
+        )
+
+        payload = {
+            "model": active_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text}
+            ],
+            "stream": False,
+            "format": "json"
+        }
+
+        try:
+            res = requests.post("http://localhost:11434/api/chat", json=payload, timeout=12.0)
+            if res.status_code == 200:
+                response_json = res.json()
+                message_content = response_json.get("message", {}).get("content", "").strip()
+
+                try:
+                    findings = json.loads(message_content)
+                    if isinstance(findings, dict) and "findings" in findings:
+                        findings = findings["findings"]
+                    if not isinstance(findings, list):
+                        findings = []
+
+                    cleaned_findings = []
+                    for idx, item in enumerate(findings):
+                        if not isinstance(item, dict):
+                            continue
+                        cleaned_findings.append({
+                            "id": f"ollama-{idx}",
+                            "label": item.get("label", "Sensitive Info Detected"),
+                            "severity": item.get("severity", "medium").lower() if item.get("severity") in ["high", "medium"] else "medium",
+                            "line": 1,
+                            "start": 0,
+                            "end": 0,
+                            "match": item.get("match", ""),
+                            "recommendation": item.get("recommendation", "Review or replace this content before sharing.")
+                        })
+
+                    return jsonify({"success": True, "findings": cleaned_findings})
+                except Exception as parse_err:
+                    current_app.logger.warning("Failed to parse Ollama JSON response: %s", str(parse_err))
+                    return jsonify({"success": True, "findings": []})
+            else:
+                return jsonify({"success": False, "error": "ollama_server_error", "message": f"HTTP {res.status_code}"})
+        except requests.exceptions.RequestException as req_err:
+            current_app.logger.warning("Ollama connection failed: %s", str(req_err))
+            return jsonify({"success": False, "error": "ollama_offline", "message": "Ollama server is offline or unreachable."})
+
+    except Exception:
+        current_app.logger.exception("Error checking leaks with Ollama")
+        return jsonify({"success": False, "error": "internal"}), 500

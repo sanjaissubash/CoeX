@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { ShieldAlert, ShieldCheck } from "lucide-react"
+import { ShieldAlert, ShieldCheck, Cpu } from "lucide-react"
 import { CUSTOM_KEYWORDS_STORAGE_KEY, normalizeLeakKeywords } from "@/lib/leak-keywords"
+import { apiClient } from "@/lib/api"
+import { useToast } from "@/components/ui/Toaster"
 
 type Severity = "high" | "medium"
 
@@ -178,8 +180,11 @@ function FindingPreview({ text, findings }: { text: string; findings: Finding[] 
 export function ContextLeakChecker({ text }: { text: string }) {
   const [findings, setFindings] = useState<Finding[] | null>(null)
   const [customKeywords, setCustomKeywords] = useState<string[]>([])
+  const [ollamaLoading, setOllamaLoading] = useState(false)
+  const [checkingMode, setCheckingMode] = useState<"regex" | "ollama" | null>(null)
   const safe = findings !== null && findings.length === 0
   const hasFindings = Boolean(findings?.length)
+  const { push } = useToast()
 
   useEffect(() => {
     try {
@@ -192,6 +197,7 @@ export function ContextLeakChecker({ text }: { text: string }) {
 
   useEffect(() => {
     setFindings(null)
+    setCheckingMode(null)
   }, [text])
 
   const counts = useMemo(() => {
@@ -201,16 +207,83 @@ export function ContextLeakChecker({ text }: { text: string }) {
     }
   }, [findings])
 
+  const runRegexCheck = () => {
+    setCheckingMode("regex")
+    setFindings(scanText(text, customKeywords))
+  }
+
+  const runOllamaCheck = async () => {
+    setOllamaLoading(true)
+    setCheckingMode("ollama")
+    try {
+      const client = apiClient()
+      const res = await client.post("/context/verify-ollama", { text })
+      if (res.data && res.data.success) {
+        setFindings(res.data.findings)
+        push({
+          title: "Ollama Scan Completed",
+          description: `Successfully analyzed context. Found ${res.data.findings.length} issues.`
+        })
+      } else {
+        setFindings([])
+        push({
+          title: "Ollama Scan Error",
+          description: res.data.message || "Ollama server returned an error.",
+        })
+      }
+    } catch (e: any) {
+      setFindings([])
+      push({
+        title: "Ollama Scan Failed",
+        description: "Verify that Ollama is running on port 11434 and has active models.",
+      })
+    } finally {
+      setOllamaLoading(false)
+    }
+  }
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setFindings(scanText(text, customKeywords))}
-        className="inline-flex items-center gap-2 rounded border border-border px-3 py-2 hover:bg-secondary"
-      >
-        {hasFindings ? <ShieldAlert className="h-4 w-4 text-destructive" /> : <ShieldCheck className="h-4 w-4" />}
-        {hasFindings ? `Leaks found (${findings?.length})` : safe ? "Safe to share" : "Verify leaks"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={runRegexCheck}
+          className="inline-flex items-center gap-2 rounded border border-border px-3 py-2 hover:bg-secondary text-xs"
+        >
+          {hasFindings && checkingMode === "regex" ? (
+            <ShieldAlert className="h-4 w-4 text-destructive" />
+          ) : (
+            <ShieldCheck className="h-4 w-4" />
+          )}
+          {hasFindings && checkingMode === "regex"
+            ? `Leaks found (${findings?.length})`
+            : safe && checkingMode === "regex"
+            ? "Safe to share (Regex)"
+            : "Verify leaks (Regex)"}
+        </button>
+
+        <button
+          type="button"
+          disabled={ollamaLoading}
+          onClick={runOllamaCheck}
+          className="inline-flex items-center gap-2 rounded border border-border px-3 py-2 hover:bg-secondary text-xs disabled:opacity-50"
+        >
+          {ollamaLoading ? (
+            <span className="h-4 w-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          ) : hasFindings && checkingMode === "ollama" ? (
+            <ShieldAlert className="h-4 w-4 text-destructive" />
+          ) : (
+            <Cpu className="h-4 w-4 text-accent" />
+          )}
+          {ollamaLoading
+            ? "Analyzing with LLM..."
+            : hasFindings && checkingMode === "ollama"
+            ? `Ollama detected leaks (${findings?.length})`
+            : safe && checkingMode === "ollama"
+            ? "Safe to share (Ollama)"
+            : "Verify leaks (Ollama LLM)"}
+        </button>
+      </div>
 
       {findings !== null && (
         <div className="min-w-0 basis-full rounded border border-border bg-secondary/30 p-3 text-left">
