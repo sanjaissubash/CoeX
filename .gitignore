@@ -23,6 +23,11 @@ storage/families/*
 storage/uploads/*
 storage/exports/*
 
+# CloudTrail dummy/demo data (generated locally by scripts, not needed in git)
+storage/cloudtrail/*
+storage/**/*CloudTrail*.json
+storage/**/*CloudTrail*.json.gz
+
 # Node.js
 node_modules/
 .next/
