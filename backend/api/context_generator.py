@@ -357,11 +357,12 @@ def verify_context_ollama():
                 {"role": "user", "content": text}
             ],
             "stream": False,
-            "format": "json"
+            "format": "json",
+            "keep_alive": -1
         }
 
         try:
-            res = requests.post("http://localhost:11434/api/chat", json=payload, timeout=12.0)
+            res = requests.post("http://localhost:11434/api/chat", json=payload, timeout=45.0)
             if res.status_code == 200:
                 response_json = res.json()
                 message_content = response_json.get("message", {}).get("content", "").strip()
@@ -394,6 +395,13 @@ def verify_context_ollama():
                     return jsonify({"success": True, "findings": []})
             else:
                 return jsonify({"success": False, "error": "ollama_server_error", "message": f"HTTP {res.status_code}"})
+        except requests.exceptions.Timeout as timeout_err:
+            current_app.logger.warning("Ollama scan timed out: %s", str(timeout_err))
+            return jsonify({
+                "success": False, 
+                "error": "ollama_timeout", 
+                "message": "Ollama scan timed out. The model is loading or inference is slow on the server's CPU. Please try again."
+            })
         except requests.exceptions.RequestException as req_err:
             current_app.logger.warning("Ollama connection failed: %s", str(req_err))
             return jsonify({"success": False, "error": "ollama_offline", "message": "Ollama server is offline or unreachable."})
