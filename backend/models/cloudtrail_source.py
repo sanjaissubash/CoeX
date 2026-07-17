@@ -20,12 +20,24 @@ class CloudTrailSource(db.Model):
     project_id = db.Column(db.String(36), db.ForeignKey("projects.id"), nullable=False)
     name = db.Column(db.String(255), nullable=False)
     source_type = db.Column(db.String(50), default="local_folder")  # local_folder, s3
+
+    # For s3 sources, AWS connection (auth + AWS account ID) is shared with the
+    # project's Compliance/Audit tabs via this link, instead of every CloudTrail
+    # source re-collecting its own role ARN / external ID. See ComplianceAccount.
+    compliance_account_id = db.Column(db.String(36), db.ForeignKey("compliance_accounts.id"))
+
     location = db.Column(db.Text, nullable=False)  # folder path OR s3://bucket/prefix
-    account_id = db.Column(db.String(100))  # required for s3 (used to build the AWSLogs/<account_id>/... key path)
-    regions = db.Column(db.Text, default="us-east-1")  # comma-separated, only used for s3
-    connection_method = db.Column(db.String(50), default="local_role")  # local_role, cross_account_role (s3 only)
+    regions = db.Column(db.Text, default="us-east-1")  # comma-separated; CloudTrail's own bucket region layout, only used for s3
+
+    # Legacy fields, kept only so CloudTrailSource rows created before the
+    # compliance_account_id link existed keep working (see
+    # cloudtrail_service.resolve_s3_connection). New s3 sources always go
+    # through compliance_account_id instead.
+    account_id = db.Column(db.String(100))
+    connection_method = db.Column(db.String(50), default="local_role")
     role_arn = db.Column(db.String(512))
     external_id = db.Column(db.String(255))
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -35,9 +47,10 @@ class CloudTrailSource(db.Model):
             "project_id": self.project_id,
             "name": self.name,
             "source_type": self.source_type,
+            "compliance_account_id": self.compliance_account_id,
             "location": self.location,
-            "account_id": self.account_id,
             "regions": self.regions,
+            "account_id": self.account_id,
             "connection_method": self.connection_method,
             "role_arn": self.role_arn,
             "external_id": self.external_id,

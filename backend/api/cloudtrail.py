@@ -20,6 +20,7 @@ from backend.models import Project, Task
 from backend.models.cloudtrail_source import CloudTrailSource
 from backend.models.cloudtrail_task_link import CloudTrailTaskLink
 from backend.models.cloudtrail_watch_rule import CloudTrailWatchRule
+from backend.models.compliance_account import ComplianceAccount
 from backend.services import cloudtrail_service as cts
 from backend.services import ollama_service as ai
 from backend.services.activity_service import ActivityService
@@ -45,15 +46,18 @@ def create_cloudtrail_source(project_id):
     name = (body.get("name") or "").strip()
     source_type = body.get("source_type", "local_folder")
     location = (body.get("location") or "").strip()
-    account_id = (body.get("account_id") or "").strip()
+    compliance_account_id = (body.get("compliance_account_id") or "").strip() or None
 
     if not name or not location:
         return jsonify({"success": False, "error": "name and location are required"}), 400
 
     if source_type == "s3":
-        if not account_id:
-            return jsonify({"success": False, "error": "account_id is required for an S3 source "
-                                                        "(used to build the AWSLogs/<account_id>/... key path)"}), 400
+        if not compliance_account_id:
+            return jsonify({"success": False, "error": "compliance_account_id is required for an S3 source — "
+                                                        "connect (or pick) an AWS account for this project first"}), 400
+        account = ComplianceAccount.query.filter_by(id=compliance_account_id, project_id=project_id).first()
+        if not account:
+            return jsonify({"success": False, "error": "Account not found for this project"}), 404
         bucket, _prefix = cts.parse_s3_location(location)
         if not bucket:
             return jsonify({"success": False, "error": "location must be s3://bucket[/prefix]"}), 400
@@ -63,11 +67,8 @@ def create_cloudtrail_source(project_id):
         name=name,
         source_type=source_type,
         location=location,
-        account_id=account_id or None,
+        compliance_account_id=compliance_account_id if source_type == "s3" else None,
         regions=body.get("regions", "us-east-1"),
-        connection_method=body.get("connection_method", "local_role"),
-        role_arn=body.get("role_arn") if source_type == "s3" else None,
-        external_id=body.get("external_id") if source_type == "s3" else None,
     )
     db.session.add(source)
     db.session.commit()
@@ -125,15 +126,18 @@ def _load_events_for_request(source, body):
     date_from = body.get("date_from")
     date_to = body.get("date_to")
 
-    session = None
+    session, s3_account_id = None, None
     if source.source_type == "s3":
+        account = ComplianceAccount.query.get(source.compliance_account_id) if source.compliance_account_id else None
         try:
-            session = cts.build_aws_session(source)
+            session, s3_account_id = cts.resolve_s3_connection(source, account)
         except (NoCredentialsError, ClientError, ValueError) as e:
             raise RuntimeError(f"AWS connection failed: {e}") from e
 
     try:
-        events, meta = cts.load_events(source, session=session, date_from=date_from, date_to=date_to)
+        events, meta = cts.load_events(
+            source, session=session, date_from=date_from, date_to=date_to, s3_account_id=s3_account_id
+        )
     except cts.DateRangeError as e:
         raise ValueError(str(e)) from e
     except (ClientError, NoCredentialsError) as e:

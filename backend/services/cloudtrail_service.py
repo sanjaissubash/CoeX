@@ -113,16 +113,36 @@ def build_aws_session(source):
     return session
 
 
+def resolve_s3_connection(source, compliance_account):
+    """Resolve (session, account_id) for an s3 CloudTrailSource.
+
+    Preferred path: the source is linked to a project's shared ComplianceAccount
+    (compliance_account_id) — the same AWS connection already used by the
+    Compliance/Audit tabs, so a project's accounts are set up once and reused
+    everywhere. `compliance_account` is a ComplianceAccount instance, or None.
+
+    Falls back to the source's own legacy connection_method/role_arn/external_id/
+    account_id fields for any CloudTrailSource rows created before that link
+    existed (build_aws_session only needs .connection_method/.role_arn/
+    .external_id, which both ComplianceAccount and CloudTrailSource expose).
+    """
+    if compliance_account is not None:
+        return build_aws_session(compliance_account), compliance_account.account_id
+    return build_aws_session(source), source.account_id
+
+
 # --- Loading -----------------------------------------------------------------
 
-def load_events(source, session=None, date_from=None, date_to=None):
+def load_events(source, session=None, date_from=None, date_to=None, s3_account_id=None):
     """Load and normalize events for a CloudTrailSource-like object.
 
-    `source` exposes `.source_type`, `.location`, `.account_id`, `.regions`.
-    For source_type == "s3", `session` (a boto3.Session) is required and the
-    date range is resolved/capped via resolve_date_range (defaults to the last
-    7 days if not given). For "local_folder", the date range is optional and
-    only used to filter the (already cheap to load) local dataset.
+    `source` exposes `.source_type`, `.location`, `.regions`. For source_type ==
+    "s3", `session` (a boto3.Session) is required and `s3_account_id` gives the
+    AWS account ID to build the S3 key path with (falls back to `source.account_id`
+    for legacy sources not linked to a ComplianceAccount — see resolve_s3_connection).
+    The date range is resolved/capped via resolve_date_range (defaults to the last
+    7 days if not given). For "local_folder", the date range is optional and only
+    used to filter the (already cheap to load) local dataset.
 
     Returns (events, meta) where meta describes the range actually used.
     """
@@ -139,7 +159,7 @@ def load_events(source, session=None, date_from=None, date_to=None):
         if session is None:
             raise ValueError("An AWS session is required to read an S3 CloudTrail source")
         d_from, d_to, defaulted = resolve_date_range(date_from, date_to)
-        raw = _load_s3(source, session, d_from, d_to)
+        raw = _load_s3(source, session, d_from, d_to, account_id=s3_account_id or source.account_id)
         events = [_normalize(r) for r in raw]
         meta.update(date_from=d_from.isoformat(), date_to=d_to.isoformat(), date_range_defaulted=defaulted)
     else:
@@ -196,7 +216,7 @@ def parse_s3_location(location):
     return bucket, prefix
 
 
-def _load_s3(source, session, d_from, d_to):
+def _load_s3(source, session, d_from, d_to, account_id):
     """Fetch only the S3 objects for the requested date range.
 
     CloudTrail's S3 delivery layout is date-partitioned:
@@ -204,8 +224,9 @@ def _load_s3(source, session, d_from, d_to):
     so each day in the range maps to one exact prefix per region — no bucket-wide
     listing is ever performed, however large the bucket's total history is.
     """
-    if not source.account_id:
-        raise ValueError("account_id is required to build the CloudTrail S3 key path")
+    if not account_id:
+        raise ValueError("An AWS account ID is required to build the CloudTrail S3 key path "
+                          "(connect an account for this source)")
 
     bucket, base_prefix = parse_s3_location(source.location)
     if not bucket:
@@ -219,7 +240,7 @@ def _load_s3(source, session, d_from, d_to):
     for day in _daterange(d_from, d_to):
         for region in regions:
             prefix = "/".join(filter(None, [
-                base_prefix, "AWSLogs", source.account_id, "CloudTrail", region,
+                base_prefix, "AWSLogs", account_id, "CloudTrail", region,
                 f"{day.year:04d}", f"{day.month:02d}", f"{day.day:02d}", "",
             ]))
             paginator = s3.get_paginator("list_objects_v2")

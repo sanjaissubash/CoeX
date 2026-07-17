@@ -58,6 +58,7 @@ def init_db(app=None):
                 'connection_method': "TEXT DEFAULT 'local_role'",
                 'role_arn': "TEXT",
                 'external_id': "TEXT",
+                'compliance_account_id': "VARCHAR(36)",
             })
             _add_missing_columns(conn, 'cloudtrail_watch_rules', {
                 'check_interval_seconds': "INTEGER DEFAULT 300",

@@ -79,15 +79,17 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
   const [copiedTextType, setCopiedTextType] = useState<string>("")
   const [showGuide, setShowGuide] = useState<boolean>(false)
 
+  // Connected AWS accounts for this project (shared with Compliance/Audit — one account,
+  // set up once, reused everywhere read-only AWS access is needed)
+  const [complianceAccounts, setComplianceAccounts] = useState<any[]>([])
+  const [loadingAccounts, setLoadingAccounts] = useState<boolean>(false)
+
   // Add-source form
   const [srcSourceType, setSrcSourceType] = useState<"local_folder" | "s3">("local_folder")
   const [srcName, setSrcName] = useState<string>("")
   const [srcLocation, setSrcLocation] = useState<string>("")
-  const [srcAccountId, setSrcAccountId] = useState<string>("")
+  const [srcComplianceAccountId, setSrcComplianceAccountId] = useState<string>("")
   const [srcRegions, setSrcRegions] = useState<string>("us-east-1")
-  const [srcConnectionMethod, setSrcConnectionMethod] = useState<string>("local_role")
-  const [srcRoleArn, setSrcRoleArn] = useState<string>("")
-  const [srcExternalId, setSrcExternalId] = useState<string>("")
 
   // Date range (applies to both source types; required in spirit for S3 — it's what
   // bounds the S3 fetch to specific day-prefixes instead of scanning the bucket)
@@ -123,6 +125,7 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
 
   useEffect(() => {
     loadSources()
+    loadComplianceAccounts()
   }, [projectId])
 
   useEffect(() => {
@@ -158,6 +161,19 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
     }
   }
 
+  const loadComplianceAccounts = async () => {
+    setLoadingAccounts(true)
+    try {
+      const client = apiClient()
+      const res = await client.get(`/projects/${projectId}/compliance/accounts`)
+      if (res.data?.success) setComplianceAccounts(res.data.data || [])
+    } catch (e) {
+      console.error("Failed to load connected AWS accounts", e)
+    } finally {
+      setLoadingAccounts(false)
+    }
+  }
+
   const handleLoadDemo = async () => {
     try {
       const client = apiClient()
@@ -177,15 +193,8 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
     setSrcSourceType("local_folder")
     setSrcName("")
     setSrcLocation("")
-    setSrcAccountId("")
+    setSrcComplianceAccountId(complianceAccounts[0]?.id || "")
     setSrcRegions("us-east-1")
-    setSrcConnectionMethod("local_role")
-    setSrcRoleArn("")
-    setSrcExternalId(
-      typeof window !== "undefined" && window.crypto && window.crypto.randomUUID
-        ? window.crypto.randomUUID()
-        : Math.random().toString(36).substring(2, 15)
-    )
     setShowGuide(false)
   }
 
@@ -194,8 +203,8 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
     if (!srcName || !srcLocation) {
       return push({ title: "Validation Error", description: "Name and location are required" })
     }
-    if (srcSourceType === "s3" && !srcAccountId) {
-      return push({ title: "Validation Error", description: "AWS account ID is required for an S3 source" })
+    if (srcSourceType === "s3" && !srcComplianceAccountId) {
+      return push({ title: "Validation Error", description: "Select a connected AWS account for this source" })
     }
     try {
       const client = apiClient()
@@ -203,11 +212,8 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
         name: srcName,
         location: srcLocation,
         source_type: srcSourceType,
-        account_id: srcSourceType === "s3" ? srcAccountId : undefined,
+        compliance_account_id: srcSourceType === "s3" ? srcComplianceAccountId : undefined,
         regions: srcSourceType === "s3" ? srcRegions : undefined,
-        connection_method: srcSourceType === "s3" ? srcConnectionMethod : undefined,
-        role_arn: srcSourceType === "s3" && srcConnectionMethod === "cross_account_role" ? srcRoleArn : undefined,
-        external_id: srcSourceType === "s3" && srcConnectionMethod === "cross_account_role" ? srcExternalId : undefined,
       })
       if (res.data?.success) {
         push({ title: "Source added" })
@@ -500,6 +506,8 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
 
   const events: any[] = result?.events || []
   const activeSource = sources.find((s: any) => s.id === selectedSourceId)
+  const selectedAccount = complianceAccounts.find((a: any) => a.id === srcComplianceAccountId)
+  const bucketName = srcLocation.replace(/^s3:\/\//, "").split("/")[0] || "your-cloudtrail-bucket"
 
   const s3ReadPolicyJson = `{
   "Version": "2012-10-17",
@@ -507,12 +515,12 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
     {
       "Effect": "Allow",
       "Action": ["s3:ListBucket"],
-      "Resource": "arn:aws:s3:::${srcLocation.replace(/^s3:\/\//, "").split("/")[0] || "your-cloudtrail-bucket"}"
+      "Resource": "arn:aws:s3:::${bucketName}"
     },
     {
       "Effect": "Allow",
       "Action": ["s3:GetObject"],
-      "Resource": "arn:aws:s3:::${srcLocation.replace(/^s3:\/\//, "").split("/")[0] || "your-cloudtrail-bucket"}/*"
+      "Resource": "arn:aws:s3:::${bucketName}/*"
     }
   ]
 }`
@@ -522,9 +530,15 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
   "Statement": [
     {
       "Effect": "Allow",
-      "Principal": { "AWS": "arn:aws:iam::${srcAccountId || "123456789012"}:role/CoeX-EC2-Instance-Profile" },
+      "Principal": {
+        "AWS": "arn:aws:iam::<HOST_ACCOUNT_ID>:role/CoeX-EC2-Instance-Profile"
+      },
       "Action": "sts:AssumeRole",
-      "Condition": { "StringEquals": { "sts:ExternalId": "${srcExternalId || "coex-cloudtrail-external-id"}" } }
+      "Condition": {
+        "StringEquals": {
+          "sts:ExternalId": "${selectedAccount?.external_id || "<see this account's External ID in the Compliance tab>"}"
+        }
+      }
     }
   ]
 }`
@@ -607,6 +621,11 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
             >
               {s.source_type === "s3" ? <Cloud className="h-3.5 w-3.5" /> : <Folder className="h-3.5 w-3.5" />}
               <span>{s.name}</span>
+              {s.source_type === "s3" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary/10 border border-border/60 text-muted-foreground">
+                  {complianceAccounts.find((a: any) => a.id === s.compliance_account_id)?.name || "Account not found"}
+                </span>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -1103,16 +1122,27 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">AWS Account ID</label>
-                      <input
-                        type="text"
-                        required
-                        maxLength={12}
-                        placeholder="12-digit account ID"
-                        value={srcAccountId}
-                        onChange={(e) => setSrcAccountId(e.target.value)}
-                        className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
-                      />
+                      <label className="text-sm font-medium">Connected AWS Account</label>
+                      {loadingAccounts ? (
+                        <div className="text-xs text-muted-foreground pt-2">Loading accounts…</div>
+                      ) : complianceAccounts.length === 0 ? (
+                        <div className="text-xs text-muted-foreground italic pt-2 leading-normal">
+                          No connected AWS accounts yet. Add one in the <strong>Compliance</strong> tab first —
+                          the same account connection is reused across Compliance, Audit, and CloudTrail.
+                        </div>
+                      ) : (
+                        <select
+                          required
+                          value={srcComplianceAccountId}
+                          onChange={(e) => setSrcComplianceAccountId(e.target.value)}
+                          className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
+                        >
+                          <option value="" disabled>Select an account…</option>
+                          {complianceAccounts.map((acc: any) => (
+                            <option key={acc.id} value={acc.id}>{acc.name} ({acc.account_id})</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Trail Regions (comma-separated)</label>
@@ -1124,85 +1154,18 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                         onChange={(e) => setSrcRegions(e.target.value)}
                         className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
                       />
+                      <p className="text-[10px] text-muted-foreground leading-normal">
+                        Which regions the trail publishes to — can differ from the account's Compliance scan regions.
+                      </p>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium block">Connection Mode</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1.5">
-                      <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer select-none transition-colors ${
-                        srcConnectionMethod === "local_role"
-                          ? "border-accent bg-accent/5 text-foreground"
-                          : "border-border bg-background text-muted-foreground hover:bg-secondary/2"
-                      }`}>
-                        <input
-                          type="radio"
-                          name="srcConnectionMethod"
-                          checked={srcConnectionMethod === "local_role"}
-                          onChange={() => setSrcConnectionMethod("local_role")}
-                          className="mt-1"
-                        />
-                        <div>
-                          <span className="font-semibold block text-sm">This Server's Role</span>
-                          <span className="text-xs text-muted-foreground block mt-1 leading-normal">
-                            Use the EC2 Instance Profile role already attached to this server.
-                          </span>
-                        </div>
-                      </label>
-                      <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer select-none transition-colors ${
-                        srcConnectionMethod === "cross_account_role"
-                          ? "border-accent bg-accent/5 text-foreground"
-                          : "border-border bg-background text-muted-foreground hover:bg-secondary/2"
-                      }`}>
-                        <input
-                          type="radio"
-                          name="srcConnectionMethod"
-                          checked={srcConnectionMethod === "cross_account_role"}
-                          onChange={() => setSrcConnectionMethod("cross_account_role")}
-                          className="mt-1"
-                        />
-                        <div>
-                          <span className="font-semibold block text-sm">Cross-Account Role</span>
-                          <span className="text-xs text-muted-foreground block mt-1 leading-normal">
-                            Assume a role in the account that owns the trail bucket via STS + External ID.
-                          </span>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {srcConnectionMethod === "cross_account_role" && (
-                    <div className="space-y-4 p-4 rounded-lg bg-secondary/5 border border-border">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Assumable IAM Role ARN</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="arn:aws:iam::123456789012:role/CoeX-CloudTrail-Read-Role"
-                          value={srcRoleArn}
-                          onChange={(e) => setSrcRoleArn(e.target.value)}
-                          className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium block">STS External ID</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            readOnly
-                            value={srcExternalId}
-                            className="flex-1 rounded border border-border bg-background/50 px-3 py-2 text-sm font-mono"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(srcExternalId, "external_id")}
-                            className="rounded border border-border bg-background px-3 py-2 hover:bg-secondary/5 text-sm"
-                          >
-                            {copiedTextType === "external_id" ? "Copied!" : <Copy className="h-4 w-4" />}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                  {selectedAccount && (
+                    <p className="text-[11px] text-muted-foreground leading-normal bg-secondary/5 border border-border rounded p-2.5">
+                      Using <strong>{selectedAccount.connection_method === "cross_account_role" ? "cross-account role" : "this server's role"}</strong> connection
+                      already set up for <strong>{selectedAccount.name}</strong> in the Compliance tab. Just add the S3 read
+                      permissions below to that same role — no new account setup needed.
+                    </p>
                   )}
 
                   <div className="border border-border/80 rounded-lg overflow-hidden">
@@ -1213,46 +1176,67 @@ export function CloudTrailSection({ projectId }: CloudTrailSectionProps) {
                     >
                       <span className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-accent" />
-                        Read-only IAM policy guide
+                        AWS IAM Permissions Setup Guide (For CloudTrail Review)
                       </span>
                       {showGuide ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </button>
                     {showGuide && (
-                      <div className="p-4 border-t border-border space-y-4 bg-background text-xs leading-relaxed max-h-[220px] overflow-y-auto">
-                        <div>
-                          <div className="flex items-center justify-between font-bold text-muted-foreground uppercase tracking-wider text-[10px] mb-1.5">
-                            <span>S3 read-only permissions (attach to the role above)</span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(s3ReadPolicyJson, "s3read")}
-                              className="flex items-center gap-1 hover:text-foreground text-[9px]"
-                            >
-                              <Copy className="h-3 w-3" />
-                              {copiedTextType === "s3read" ? "Copied JSON!" : "Copy JSON"}
-                            </button>
-                          </div>
-                          <pre className="p-3 bg-secondary/5 rounded border border-border overflow-x-auto text-[11px] font-mono whitespace-pre text-foreground">
-                            {s3ReadPolicyJson}
-                          </pre>
-                        </div>
-                        {srcConnectionMethod === "cross_account_role" && (
+                      <div className="p-4 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-6 bg-background text-xs leading-relaxed max-h-[350px] overflow-y-auto">
+                        {/* Left Column: Host / Source account setup */}
+                        <div className="space-y-4">
+                          <h5 className="font-bold text-sm text-foreground border-b border-border/60 pb-1.5">
+                            Host (Source) AWS Account Setup
+                          </h5>
+                          <p className="text-muted-foreground">
+                            Attach this policy to the same IAM role already used for this account's connection
+                            (the EC2 Instance Profile role, or the assumed role if cross-account):
+                          </p>
                           <div>
                             <div className="flex items-center justify-between font-bold text-muted-foreground uppercase tracking-wider text-[10px] mb-1.5">
-                              <span>Trust relationship (on the target account's role)</span>
+                              <span>1. S3 Read-Only Permissions Policy</span>
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(s3ReadPolicyJson, "s3read")}
+                                className="flex items-center gap-1 hover:text-foreground text-[9px]"
+                              >
+                                <Copy className="h-3 w-3" />
+                                {copiedTextType === "s3read" ? "Copied!" : "Copy"}
+                              </button>
+                            </div>
+                            <pre className="p-3 bg-secondary/5 rounded border border-border overflow-x-auto text-[11px] font-mono whitespace-pre text-foreground max-h-[150px]">
+                              {s3ReadPolicyJson}
+                            </pre>
+                          </div>
+                        </div>
+
+                        {/* Right Column: Target / Destination account setup */}
+                        <div className="space-y-4">
+                          <h5 className="font-bold text-sm text-foreground border-b border-border/60 pb-1.5">
+                            Target (Destination) AWS Account Setup
+                          </h5>
+                          <p className="text-muted-foreground">
+                            Only needed if the bucket lives in a <strong>different</strong> account than this
+                            server — attach the same S3 policy (left) plus this trust relationship on the
+                            target account's assumed role (this was already configured when the account was
+                            connected in Compliance, shown here for reference):
+                          </p>
+                          <div>
+                            <div className="flex items-center justify-between font-bold text-muted-foreground uppercase tracking-wider text-[10px] mb-1.5">
+                              <span>2. Trust Relationship Configuration</span>
                               <button
                                 type="button"
                                 onClick={() => copyToClipboard(s3TrustPolicyJson, "s3trust")}
                                 className="flex items-center gap-1 hover:text-foreground text-[9px]"
                               >
                                 <Copy className="h-3 w-3" />
-                                {copiedTextType === "s3trust" ? "Copied JSON!" : "Copy JSON"}
+                                {copiedTextType === "s3trust" ? "Copied!" : "Copy"}
                               </button>
                             </div>
-                            <pre className="p-3 bg-secondary/5 rounded border border-border overflow-x-auto text-[11px] font-mono whitespace-pre text-foreground">
+                            <pre className="p-3 bg-secondary/5 rounded border border-border overflow-x-auto text-[11px] font-mono whitespace-pre text-foreground max-h-[150px]">
                               {s3TrustPolicyJson}
                             </pre>
                           </div>
-                        )}
+                        </div>
                       </div>
                     )}
                   </div>

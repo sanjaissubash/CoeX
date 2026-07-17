@@ -27,6 +27,7 @@ from backend.models.cloudtrail_rule_match import CloudTrailRuleMatch
 from backend.models.cloudtrail_source import CloudTrailSource
 from backend.models.cloudtrail_task_link import CloudTrailTaskLink
 from backend.models.cloudtrail_watch_rule import CloudTrailWatchRule
+from backend.models.compliance_account import ComplianceAccount
 from backend.services import cloudtrail_service as cts
 from backend.services.activity_service import ActivityService
 
@@ -85,12 +86,16 @@ def _evaluate_rule(rule, events_by_source):
         raise ValueError("source not found")
 
     if source.id not in events_by_source:
-        session = cts.build_aws_session(source) if source.source_type == "s3" else None
+        session, s3_account_id = None, None
+        if source.source_type == "s3":
+            account = ComplianceAccount.query.get(source.compliance_account_id) if source.compliance_account_id else None
+            session, s3_account_id = cts.resolve_s3_connection(source, account)
         date_to = datetime.utcnow().date()
         date_from = date_to - timedelta(days=WATCH_WINDOW_DAYS - 1)
         events, _meta = cts.load_events(
             source, session=session,
             date_from=date_from.isoformat(), date_to=date_to.isoformat(),
+            s3_account_id=s3_account_id,
         )
         events_by_source[source.id] = events
 
