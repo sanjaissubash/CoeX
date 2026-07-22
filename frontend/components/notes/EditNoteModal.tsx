@@ -54,8 +54,15 @@ export function EditNoteModal({
           <input value={title} onChange={e=>setTitle(e.target.value)} className="w-full rounded border border-border px-3 py-2 mt-1" />
         </div>
         <div>
-          <label className="text-sm font-medium">Content</label>
-          <textarea value={content} onChange={e=>setContent(e.target.value)} className="w-full rounded border border-border px-3 py-2 mt-1" rows={6} />
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-medium">Content</label>
+            <div className="flex gap-1">
+              <button type="button" onClick={() => setContent(content + '**Bold text** ')} className="text-xs border border-border rounded px-2 py-1 hover:bg-secondary font-semibold">B</button>
+              <button type="button" onClick={() => setContent(content + '\n```\nCode snippet\n```\n')} className="text-xs border border-border rounded px-2 py-1 hover:bg-secondary font-mono">{'</>'}</button>
+              <button type="button" onClick={() => setContent(content + '\n- List item\n')} className="text-xs border border-border rounded px-2 py-1 hover:bg-secondary">List</button>
+            </div>
+          </div>
+          <textarea value={content} onChange={e=>setContent(e.target.value)} className="w-full rounded border border-border px-3 py-2 font-mono text-sm" rows={10} />
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2"><input type="checkbox" checked={pinned} onChange={e=>setPinned(e.target.checked)} /> <span className="text-sm">Pinned</span></label>

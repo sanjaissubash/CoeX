@@ -38,6 +38,7 @@ export function TasksSection({ projectId }: { projectId: string }) {
   const [contextTask, setContextTask] = useState<Task | null>(null)
   const [contextOpen, setContextOpen] = useState(false)
   const [contextLoading, setContextLoading] = useState(false)
+  const [contextMode, setContextMode] = useState("standard")
   const [contextText, setContextText] = useState("")
   const [copiedContext, setCopiedContext] = useState(false)
   const { push } = useToast()
@@ -141,13 +142,10 @@ export function TasksSection({ projectId }: { projectId: string }) {
     setSelected(null)
   }
 
-  const openTaskContext = async (task: Task) => {
-    setContextTask(task)
-    setContextOpen(true)
+  const fetchContextData = async (task: Task, mode: string) => {
     setContextLoading(true)
-    setCopiedContext(false)
     try {
-      const response = await apiClient().get(`/tasks/${task.id}/context`)
+      const response = await apiClient().get(`/tasks/${task.id}/context?mode=${mode}`)
       if (response.data.success) setContextText(response.data.data.compact_text)
       else setContextText("Failed to generate task context")
     } catch (error) {
@@ -156,6 +154,14 @@ export function TasksSection({ projectId }: { projectId: string }) {
     } finally {
       setContextLoading(false)
     }
+  }
+
+  const openTaskContext = async (task: Task) => {
+    setContextTask(task)
+    setContextOpen(true)
+    setCopiedContext(false)
+    setContextMode("standard")
+    fetchContextData(task, "standard")
   }
 
   const copyTaskContext = async () => {
@@ -263,6 +269,26 @@ export function TasksSection({ projectId }: { projectId: string }) {
 
       <Modal open={contextOpen} onClose={() => setContextOpen(false)} title="Task Context">
         <div className="space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium">Generation Mode</label>
+            <select 
+              value={contextMode} 
+              onChange={(e) => {
+                setContextMode(e.target.value)
+                if (contextTask) fetchContextData(contextTask, e.target.value)
+              }} 
+              className="rounded border border-border bg-background px-2 py-1 text-sm"
+              disabled={contextLoading}
+            >
+              <option value="standard">Standard (Default)</option>
+              <option value="draft_internal">Draft Internal Update</option>
+              <option value="draft_client">Draft Client Update</option>
+              <option value="readonly_checks">Readonly Checks</option>
+              <option value="troubleshoot">Troubleshoot Issue</option>
+              <option value="setup_manual">Config Setup (Manual)</option>
+              <option value="setup_iac">Config Setup (IaC / Code)</option>
+            </select>
+          </div>
           {contextLoading ? (
             <div className="text-sm text-muted-foreground">Generating task context...</div>
           ) : (

@@ -120,6 +120,9 @@ FLASK_APP=backend/main.py
 SQLALCHEMY_DATABASE_URI=sqlite:///storage/coex.db
 EOF
 
+  echo "🌱 Initializing Database and Seeding Prompts..."
+  .venv/bin/python backend/seed_workflow_prompts.py
+
   # Config Frontend Environment
   echo "⚙️ Creating frontend/.env.local..."
   cat > frontend/.env.local << 'EOF'
@@ -237,6 +240,9 @@ FLASK_ENV=production
 FLASK_APP=backend/main.py
 SQLALCHEMY_DATABASE_URI=sqlite:///storage/coex.db
 EOF
+
+  echo "🌱 Initializing Database and Seeding Prompts..."
+  venv/bin/python backend/seed_workflow_prompts.py
 
   # Ask for Custom API URL (eg. https://domain.com/api) for frontend compilation
   read -rp "Enter public domain/IP API URL (fallback: /api): " custom_api_url

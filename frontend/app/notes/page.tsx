@@ -23,6 +23,45 @@ import {
   PanelRightClose,
   PanelRightOpen
 } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import { TipTapEditor, TipTapEditorRef } from "@/components/TipTapEditor"
+import { marked } from "marked"
+
+const CodeBlock = ({ inline, className, children, ...props }: any) => {
+  const match = /language-(\w+)/.exec(className || "")
+  const codeContent = String(children).replace(/\n$/, "")
+  const [copied, setCopied] = useState(false)
+  
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codeContent)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (!inline) {
+    return (
+      <div className="relative group my-2">
+        <button
+          onClick={handleCopy}
+          className="absolute top-2 right-2 bg-background border border-border rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center gap-1"
+        >
+          {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+        <pre className="bg-background/80 border border-border rounded-lg p-3 overflow-x-auto text-[11px] leading-relaxed">
+          <code className={className} {...props}>
+            {children}
+          </code>
+        </pre>
+      </div>
+    )
+  }
+  return (
+    <code className="bg-secondary px-1 py-0.5 rounded text-[11px]" {...props}>
+      {children}
+    </code>
+  )
+}
 
 export default function NotesPage() {
   const { push } = useToast()
@@ -31,9 +70,10 @@ export default function NotesPage() {
   const [projects, setProjects] = useState<any[]>([])
   const [notes, setNotes] = useState<any[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>("")
-  const [promptType, setPromptType] = useState<string>("Standard Prompt")
+  const [promptType, setPromptType] = useState<string>("draft_internal")
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [isSummarizingTask, setIsSummarizingTask] = useState(false)
   
   // Collapsible Workspace states
   const [leftCollapsed, setLeftCollapsed] = useState(false)
@@ -54,11 +94,11 @@ export default function NotesPage() {
   const [saveStatus, setSaveStatus] = useState<"saved" | "editing" | "saving">("saved")
   
   // Generated Prompt State
-  const [generatedPrompt, setGeneratedPrompt] = useState("")
-  const [copiedPrompt, setCopiedPrompt] = useState(false)
+  const [generatedExternalPrompt, setGeneratedExternalPrompt] = useState("")
+  const [copiedExternal, setCopiedExternal] = useState(false)
 
-  // Gutter ref
-  const editorRef = useRef<HTMLTextAreaElement>(null)
+  // Editor ref
+  const editorRef = useRef<TipTapEditorRef>(null)
   
   // Load Projects and Notes
   useEffect(() => {
@@ -259,110 +299,122 @@ export default function NotesPage() {
   }
 
   // Prompt Generator Logic
-  const handleGeneratePrompt = async () => {
+  const handleSummarizeToTask = async () => {
+    if (!activeNote || !selectedTaskId) return
+    setIsSummarizingTask(true)
+    try {
+      const content = editorRef.current?.getEditor()?.getHTML() || noteContent
+      const res = await apiClient().post('/context/summarize-task', {
+        note_text: content,
+        task_id: selectedTaskId
+      })
+      const data = res.data
+      if (data.success) {
+        push({ title: "Task updated successfully with summary!" })
+      } else {
+        push({ title: "Failed to summarize task: " + data.error })
+      }
+    } catch (err) {
+      push({ title: "Error summarizing task" })
+    } finally {
+      setIsSummarizingTask(false)
+    }
+  }
+
+  const handleExecuteWorkflow = async (action_type: "execute" | "generate") => {
     if (!selectedProjectId) {
-      alert("Please select a project context first.")
+      push({ title: "Please select a project context first." })
       return
     }
     setGenerating(true)
     try {
-      const client = apiClient()
-      const [projRes, blocksRes] = await Promise.all([
-        client.get(`/projects/${selectedProjectId}`),
-        client.get(`/projects/${selectedProjectId}/context-blocks`)
-      ])
+      let promptText = ""
       
-      if (projRes.data.success && blocksRes.data.success) {
-        const project = projRes.data.data
-        const blocks = blocksRes.data.data
-        
-        const archBlocks = blocks.filter((b: any) => b.block_type === "architecture")
-        const impBlocks = blocks.filter((b: any) => b.block_type === "improvements")
-        const generalBlocks = blocks.filter((b: any) => b.block_type === "general" || !b.block_type)
-        
-        const architectureText = archBlocks.map((b: any) => b.content).join("\n\n")
-        const improvementsText = impBlocks.map((b: any) => b.content).join("\n\n")
-        const generalText = generalBlocks.map((b: any) => b.content).join("\n\n")
-        const cloudProvider = project.ai_metadata?.cloud_provider || "AWS"
-        
-        // Find selected task context
-        const activeTask = tasks.find(t => t.id === selectedTaskId)
-        const taskDetailsText = activeTask ? `
----
-ACTIVE TASK DETAILS:
-- Title: ${activeTask.title}
-- Description: ${activeTask.description || "No description provided."}
-- Priority: ${activeTask.priority}
-- Status: ${activeTask.status}
-` : ""
-
-        let promptText = ""
-        
-        if (promptType === "Standard Prompt") {
-          promptText = `You are an expert software engineer and cloud developer assisting me with the following cloud project:
-          
-Project Name: ${project.name}
-Description: ${project.description || "No description provided."}
-Cloud Provider: ${cloudProvider}
-${taskDetailsText}
----
-PROJECT ARCHITECTURE REFERENCE:
-${architectureText || "No parsed architecture layout available yet."}
-
----
-SECURITY RECOMMENDATIONS & AUDITS:
-${improvementsText || "No infrastructure warnings or vulnerability reports available."}
-
----
-ADDITIONAL CONTEXT KNOWLEDGE:
-${generalText || "No supplementary context blocks recorded."}
-
----
-TASK INSTRUCTION:
-Please execute the following instruction based on the project context above:
-${noteContent || "(No input text entered)"}
-`
-        } else if (promptType === "Instructional") {
-          promptText = `[SYSTEM INSTRUCTIONS]
-Apply these constraints when executing instructions for the "${project.name}" deployment:
-1. Adhere to ${cloudProvider} infrastructure security configurations.
-2. Flag any insecure ports or components.
-3. Keep logic clean and structured.
-${taskDetailsText}
-Project Description:
-${project.description || "No description provided."}
-
-User Instruction:
-${noteContent || "(No input text entered)"}
-`
-        } else if (promptType === "Rephrase Reply") {
-          promptText = `Rephrase this message to be clear, professional, and contextually aware of our ${cloudProvider} deployment for "${project.name}":
-${taskDetailsText}
-Message:
-"${noteContent || "(No input text entered)"}"
-
-Provide the rephrased output directly without system preambles.
-`
-        }
-        
-        setGeneratedPrompt(promptText)
-        push({ title: "Prompt Generated!" })
+      const plainText = editorRef.current?.getEditor()?.getText() || noteContent
+      
+      const res = await apiClient().post("/context/execute-ollama", {
+        project_id: selectedProjectId,
+        task_id: selectedTaskId || undefined,
+        note_text: plainText,
+        mode: promptType,
+        action_type: action_type
+      })
+      if (res.data && res.data.success) {
+        promptText = res.data.draft
+      } else {
+        promptText = "Error: " + (res.data?.message || "Failed to execute workflow with Ollama.")
       }
+      
+      if (action_type === "execute") {
+        const editor = editorRef.current?.getEditor()
+        if (editor) {
+          const currentHtml = editor.getHTML()
+          
+          const mentionRegex = /<span[^>]*data-type="mention"[^>]*data-id="coex"[^>]*>@coex<\/span>/
+          const hasMention = mentionRegex.test(currentHtml)
+          const hasPlain = currentHtml.includes("@coex") && !hasMention
+          
+          let i = 0
+          const chars = promptText.split("")
+          let accumulatedMarkdown = ""
+          
+          const interval = setInterval(() => {
+            // Append a chunk of text
+            const chunk = chars.slice(i, i + 8).join("")
+            accumulatedMarkdown += chunk
+            
+            // Parse accumulated markdown to HTML
+            const generatedHtml = marked.parse(accumulatedMarkdown) as string
+            const aiBlock = `<div class="mt-4 mb-4 border-l-4 border-indigo-500 bg-indigo-500/5 p-4 rounded-r-lg shadow-sm">${generatedHtml}</div><p></p>`
+            
+            let nextHtml = ""
+            if (hasMention) {
+              nextHtml = currentHtml.replace(mentionRegex, () => `${aiBlock}`)
+            } else if (hasPlain) {
+              nextHtml = currentHtml.replace("@coex", `${aiBlock}`)
+            } else {
+              nextHtml = currentHtml + aiBlock
+            }
+            
+            // Update TipTap directly (faster than React state)
+            editor.commands.setContent(nextHtml)
+            
+            // Auto scroll
+            setTimeout(() => {
+              const el = document.querySelector('.ProseMirror')
+              if (el) el.scrollTop = el.scrollHeight
+            }, 0)
+            
+            i += 8
+            
+            // Finish
+            if (i >= chars.length) {
+              clearInterval(interval)
+              setNoteContent(editor.getHTML()) // Final sync with React state
+              setSaveStatus("editing")
+            }
+          }, 20)
+        }
+      } else {
+        setGeneratedExternalPrompt(promptText)
+      }
+      
+      push({ title: action_type === "execute" ? "Workflow Executed!" : "Prompt Generated!" })
     } catch (err) {
-      console.error("Failed to generate prompt:", err)
-      push({ title: "Failed to generate prompt" })
+      console.error("Failed to execute workflow:", err)
+      push({ title: "Failed to execute workflow" })
     } finally {
       setGenerating(false)
     }
   }
 
-  // Copy compiled prompt
-  const handleCopyPrompt = async () => {
+  // Copy external prompt
+  const handleCopyExternal = async () => {
     try {
-      await navigator.clipboard.writeText(generatedPrompt)
+      await navigator.clipboard.writeText(generatedExternalPrompt)
     } catch {
       const textarea = document.createElement("textarea")
-      textarea.value = generatedPrompt
+      textarea.value = generatedExternalPrompt
       textarea.style.position = "fixed"
       textarea.style.opacity = "0"
       document.body.appendChild(textarea)
@@ -370,9 +422,9 @@ Provide the rephrased output directly without system preambles.
       document.execCommand("copy")
       document.body.removeChild(textarea)
     }
-    setCopiedPrompt(true)
-    setTimeout(() => setCopiedPrompt(false), 2000)
-    push({ title: "Copied to clipboard" })
+    setCopiedExternal(true)
+    setTimeout(() => setCopiedExternal(false), 2000)
+    push({ title: "Copied prompt to clipboard" })
   }
 
   // Filter notes by search query & sort by pinned status (pinned first)
@@ -550,7 +602,7 @@ Provide the rephrased output directly without system preambles.
                     </div>
                   </div>
                   <div className="text-[11px] text-muted-foreground line-clamp-2 mt-1 whitespace-pre-wrap">
-                    {note.content || "Empty content..."}
+                    {note.content ? (note.content.replace(/<[^>]*>?/gm, '').trim() || "Empty content...") : "Empty content..."}
                   </div>
                   {note.project_id && (
                     <div className="mt-2 text-[9px] text-accent font-semibold inline-flex items-center gap-1">
@@ -590,25 +642,26 @@ Provide the rephrased output directly without system preambles.
           )}
 
           {activeNote ? (
-            <div className="flex flex-1 overflow-hidden font-mono text-sm leading-relaxed p-4 select-text pt-14">
-              {/* Gutter */}
-              <div className="text-muted-foreground/40 text-right pr-4 pl-1 select-none border-r border-border min-w-[3rem] text-xs">
-                {Array.from({ length: lineCount }).map((_, i) => (
-                  <div key={i} className="h-6">{i + 1}</div>
-                ))}
+            <div className="flex flex-1 flex-col overflow-hidden font-sans text-sm leading-relaxed select-text pt-14">
+              <div className="flex flex-1 overflow-hidden p-4">
+                {/* Gutter */}
+                <div className="text-muted-foreground/40 text-right pr-4 pl-1 select-none border-r border-border min-w-[3rem] text-xs">
+                  {Array.from({ length: lineCount }).map((_, i) => (
+                    <div key={i} className="h-6">{i + 1}</div>
+                  ))}
+                </div>
+                
+                {/* Main TipTap Editor */}
+                <TipTapEditor
+                  ref={editorRef}
+                  value={noteContent}
+                  onChange={(val) => {
+                    setNoteContent(val)
+                    setSaveStatus("editing")
+                  }}
+                  placeholder="Start drafting your instruction, code template, or prompt requirements here... (Use @coex for inline copilot)"
+                />
               </div>
-              
-              {/* Main Textarea */}
-              <textarea
-                ref={editorRef}
-                value={noteContent}
-                onChange={(e) => {
-                  setNoteContent(e.target.value)
-                  setSaveStatus("editing")
-                }}
-                placeholder="Start drafting your instruction, code template, or prompt requirements here..."
-                className="flex-1 bg-transparent border-0 outline-none resize-none px-4 overflow-y-auto leading-6 h-full text-foreground/90 caret-accent font-mono text-sm"
-              />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8 text-center space-y-2">
@@ -647,19 +700,19 @@ Provide the rephrased output directly without system preambles.
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-indigo-400" />
-              <h3 className="font-bold text-sm text-foreground">Generate Prompt</h3>
+              <h3 className="font-bold text-sm text-foreground">Techie Assistant</h3>
             </div>
             <button
               onClick={() => setRightCollapsed(true)}
               className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors"
-              title="Collapse Prompt Compiler"
+              title="Collapse Techie Assistant"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 
           <p className="text-[11px] text-muted-foreground leading-normal">
-            Merge the active document text directly with your selected cloud project environment specifications.
+            Automate your tasks by executing workflows directly with local Ollama, based on your active document and project context.
           </p>
 
           {/* Project drop selection */}
@@ -699,31 +752,46 @@ Provide the rephrased output directly without system preambles.
                   ))}
                 </select>
               </div>
+              {selectedTaskId && (
+                <button
+                  onClick={handleSummarizeToTask}
+                  disabled={isSummarizingTask}
+                  className="mt-2 w-full py-1.5 px-3 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                  {isSummarizingTask ? (
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5" />
+                  )}
+                  {isSummarizingTask ? "Summarizing..." : "Summarize to Task Description"}
+                </button>
+              )}
             </div>
           )}
 
           {/* Prompt type template wrapper drop selection */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-muted-foreground">Prompt Type</label>
+            <label className="block text-xs font-semibold text-muted-foreground">Workflow Mode</label>
             <select
               value={promptType}
               onChange={(e) => setPromptType(e.target.value)}
               className="w-full px-3 py-1.5 rounded-lg border border-border bg-background text-xs outline-none"
             >
-              <option value="Standard Prompt">Standard Prompt</option>
-              <option value="Instructional">Instructional System</option>
-              <option value="Rephrase Reply">Rephrase Reply</option>
+              <option value="draft_internal">Draft Internal Update</option>
+              <option value="draft_client">Draft Client Update</option>
+              <option value="readonly_checks">Readonly Checks</option>
+              <option value="troubleshoot">Troubleshoot Issue</option>
+              <option value="setup_manual">Config Setup Manual</option>
+              <option value="setup_iac">Config Setup IaC</option>
             </select>
             <p className="text-[10px] text-muted-foreground leading-normal mt-0.5">
-              {promptType === "Standard Prompt" && "Best for general AI code/architecture synthesis tasks."}
-              {promptType === "Instructional" && "Configures system instructions and rules."}
-              {promptType === "Rephrase Reply" && "Tailors email, slack, or PR description drafts."}
+              Powered by local Ollama execution logic.
             </p>
           </div>
 
           {/* Action Generator trigger */}
           <button
-            onClick={handleGeneratePrompt}
+            onClick={() => handleExecuteWorkflow("execute")}
             disabled={generating || !selectedProjectId}
             className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow transition-colors"
           >
@@ -732,44 +800,52 @@ Provide the rephrased output directly without system preambles.
             ) : (
               <Sparkles className="h-3.5 w-3.5 text-white" />
             )}
-            Generate Prompt
+            Execute Workflow (Ollama)
           </button>
 
-          {/* Output Preview pane */}
-          <div className="flex-grow flex flex-col space-y-1.5 min-h-[180px]">
-            <label className="block text-xs font-semibold text-muted-foreground">Generated Prompt Preview</label>
-            <textarea
-              readOnly
-              value={generatedPrompt}
-              placeholder="Compiled AI-ready prompt preview outputs will display here..."
-              className="flex-grow w-full rounded-lg border border-border bg-background/50 p-3 text-xs leading-normal font-sans resize-none outline-none select-text"
-            />
-          </div>
-
-          {/* Action Clipboard trigger */}
+          <div className="flex-grow"></div>
+          
           <button
-            onClick={handleCopyPrompt}
-            disabled={!generatedPrompt}
-            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border hover:bg-secondary disabled:opacity-50 text-xs font-semibold transition-colors animate-in fade-in duration-200 flex-shrink-0"
+            onClick={() => handleExecuteWorkflow("generate")}
+            disabled={generating || !selectedProjectId}
+            className="w-full text-[10px] flex items-center justify-center gap-1 py-1.5 mt-2 rounded border border-transparent hover:border-border text-muted-foreground hover:text-foreground transition-colors"
           >
-            {copiedPrompt ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-green-500" />
-                Copied Prompt!
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                Copy to Clipboard
-              </>
-            )}
+            Generate Prompt for External AI
           </button>
+
+          {/* External Prompt Output Preview pane */}
+          {generatedExternalPrompt && (
+            <div className="flex-grow flex flex-col space-y-1.5 min-h-[180px] mt-4 overflow-hidden">
+              <label className="block text-xs font-semibold text-muted-foreground">Generated Prompt Preview</label>
+              <div className="flex-grow w-full rounded-lg border border-border bg-background/50 p-3 text-xs leading-normal font-sans overflow-y-auto custom-scrollbar select-text [&>ul]:list-disc [&>ul]:ml-4 [&>ol]:list-decimal [&>ol]:ml-4 [&>h1]:font-bold [&>h1]:text-lg [&>h2]:font-bold [&>h2]:text-base [&>h3]:font-semibold [&>h3]:text-sm space-y-2">
+                <ReactMarkdown components={{ code: CodeBlock }}>
+                  {generatedExternalPrompt}
+                </ReactMarkdown>
+              </div>
+              <button
+                onClick={handleCopyExternal}
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border hover:bg-secondary text-xs font-semibold transition-colors mt-2"
+              >
+                {copiedExternal ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                    Copied to Clipboard!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                    Copy to Clipboard
+                  </>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Context Leak Checker Safety check */}
-          {generatedPrompt && (
+          {generatedExternalPrompt && (
             <div className="pt-3 border-t border-border mt-3 space-y-2 animate-in fade-in duration-300 flex-shrink-0">
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Safety Leak Check</div>
-              <ContextLeakChecker text={generatedPrompt} />
+              <ContextLeakChecker text={generatedExternalPrompt} />
             </div>
           )}
         </div>

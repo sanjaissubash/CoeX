@@ -5,6 +5,7 @@ import axios from "axios"
 import { apiClient } from "@/lib/api"
 import { Pin, Trash2, Edit2 } from "lucide-react"
 import { EditNoteModal } from "@/components/notes/EditNoteModal"
+import ReactMarkdown from "react-markdown"
 
 export function NotesSection({ projectId }: { projectId: string }) {
   const [notes, setNotes] = useState<any[]>([])
@@ -84,7 +85,9 @@ export function NotesSection({ projectId }: { projectId: string }) {
                     <div className="text-sm font-medium">{note.title}</div>
                     {note.pinned && <Pin className="h-3 w-3 text-accent" />}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">{note.content}</div>
+                  <div className="markdown-preview text-xs text-muted-foreground mt-1 [&>pre]:bg-black [&>pre]:p-2 [&>pre]:rounded [&>pre]:mt-1 [&>pre]:overflow-x-auto [&:not(pre)>code]:bg-black [&:not(pre)>code]:rounded [&:not(pre)>code]:px-1 [&>p]:mb-1 [&>ul]:list-disc [&>ul]:pl-4">
+                    <ReactMarkdown>{note.content || ""}</ReactMarkdown>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <button onClick={() => setEditing(note)} className="p-1 hover:bg-secondary rounded"><Edit2 className="h-3 w-3 text-muted-foreground" /></button>

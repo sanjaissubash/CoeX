@@ -19,6 +19,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true)
   const [ctxOpen, setCtxOpen] = useState(false)
   const [ctxLoading, setCtxLoading] = useState(false)
+  const [ctxMode, setCtxMode] = useState("standard")
   const [ctxText, setCtxText] = useState<string | null>(null)
   const [ctxCopied, setCtxCopied] = useState(false)
   const router = useRouter()
@@ -63,6 +64,20 @@ export default function ProjectDetailPage() {
     window.setTimeout(() => setCtxCopied(false), 1800)
   }
 
+  const fetchProjectContext = async (mode: string) => {
+    setCtxLoading(true)
+    try {
+      const client = apiClient()
+      const res = await client.get(`/projects/${projectId}/context?mode=${mode}`)
+      if (res.data && res.data.success) setCtxText(res.data.data.compact_text)
+      else setCtxText('Failed to generate context')
+    } catch (e) {
+      setCtxText('Failed to generate context')
+    } finally {
+      setCtxLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-8">
@@ -105,21 +120,10 @@ export default function ProjectDetailPage() {
             <Edit2 className="h-4 w-4" />
             Edit
           </button>
-          <button onClick={async () => {
+          <button onClick={() => {
             setCtxOpen(true)
-              if (!ctxText) {
-                setCtxLoading(true)
-                try {
-                  const client = apiClient()
-                  const res = await client.get(`/projects/${projectId}/context`)
-                  if (res.data && res.data.success) setCtxText(res.data.data.compact_text)
-                  else setCtxText('Failed to generate context')
-                } catch (e) {
-                  setCtxText('Failed to generate context')
-                } finally {
-                  setCtxLoading(false)
-                }
-              }
+            setCtxMode("standard")
+            fetchProjectContext("standard")
           }} className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 hover:bg-secondary">
             <Share2 className="h-4 w-4" />
             Generate Context
@@ -178,6 +182,26 @@ export default function ProjectDetailPage() {
 
       <Modal open={ctxOpen} onClose={() => setCtxOpen(false)} title="Generated Context">
         <div className="space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium">Generation Mode</label>
+            <select 
+              value={ctxMode} 
+              onChange={(e) => {
+                setCtxMode(e.target.value)
+                fetchProjectContext(e.target.value)
+              }} 
+              className="rounded border border-border bg-background px-2 py-1 text-sm"
+              disabled={ctxLoading}
+            >
+              <option value="standard">Standard (Default)</option>
+              <option value="draft_internal">Draft Internal Update</option>
+              <option value="draft_client">Draft Client Update</option>
+              <option value="readonly_checks">Readonly Checks</option>
+              <option value="troubleshoot">Troubleshoot Issue</option>
+              <option value="setup_manual">Config Setup (Manual)</option>
+              <option value="setup_iac">Config Setup (IaC / Code)</option>
+            </select>
+          </div>
           {ctxLoading ? (
             <div className="text-sm text-muted-foreground">Generating context...</div>
           ) : (

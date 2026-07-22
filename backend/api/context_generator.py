@@ -12,6 +12,7 @@ from backend.models import Asset, Project, ContextBlock, Task, Milestone, Decisi
 from backend.database import db
 from datetime import datetime
 from flask import current_app
+import os
 
 
 def _summarize_recent(items, limit=5, title_key="title", summary_keys=None):
@@ -171,10 +172,26 @@ def generate_project_context(project_id):
             for asset in assets[:10]:
                 parts.append(f"- {asset['file_path']} ({asset['file_type']}, {asset['size_bytes'] or 0} bytes)")
 
+        mode = request.args.get("mode", "standard")
+        if mode == "draft_internal":
+            mode_instruction = "INTERNAL UPDATE MODE: Draft a concise, technical message (for Slack/Teams) to update the internal team on the progress and status of this ticket based on the provided context."
+        elif mode == "draft_client":
+            mode_instruction = "CLIENT UPDATE MODE: Draft a professional, clear message (for Slack/Teams) to update the client on what was fixed, updated, or configured. Ensure tone is appropriate for external communication."
+        elif mode == "readonly_checks":
+            mode_instruction = "READONLY CHECKS MODE: Provide strictly non-destructive commands or scripts (e.g., for AWS CloudShell or direct server access) to check the application configuration, find logs, or verify the current state. Do not include modifying commands."
+        elif mode == "troubleshoot":
+            mode_instruction = "TROUBLESHOOTING MODE: Provide a comprehensive troubleshooting plan. You MUST include: 1) Readonly commands to confirm the issue and gather proof/logs, 2) Exact backup commands and quick restore steps to safely revert, and 3) Post-verification checks to ensure the fix worked."
+        elif mode == "setup_manual":
+            mode_instruction = "MANUAL SETUP MODE: Provide a plan to manually configure the new setup. You MUST include: 1) Readonly compatibility and prerequisite checks on the server/infra, 2) Step-by-step instructions for the Cloud console (AWS/Azure) or server commands, and 3) An estimated cost review."
+        elif mode == "setup_iac":
+            mode_instruction = "IaC SETUP MODE: Provide a code-based setup plan using Terraform/IaC. You MUST include: 1) Readonly compatibility and prerequisite checks, 2) The proper Git code flow (create feature branch, push code, create PR, merge after approval), and 3) An estimated cost review for the infrastructure."
+        else:
+            mode_instruction = "Use this context to answer my next request with continuity. If there are risks, dependencies, or missing inputs, call them out clearly before moving forward."
+
         parts.extend([
             "",
             "# How I Want You To Help",
-            "Use this context to answer my next request with continuity. If there are risks, dependencies, or missing inputs, call them out clearly before moving forward.",
+            mode_instruction,
         ])
 
         compact_text = "\n".join(parts)
@@ -285,10 +302,26 @@ def generate_task_context(task_id):
             parts.append("\n# Asset Folder Tree")
             parts.append(asset_tree)
 
+        mode = request.args.get("mode", "standard")
+        if mode == "draft_internal":
+            mode_instruction = "INTERNAL UPDATE MODE: Draft a concise, technical message (for Slack/Teams) to update the internal team on the progress and status of this ticket based on the provided context."
+        elif mode == "draft_client":
+            mode_instruction = "CLIENT UPDATE MODE: Draft a professional, clear message (for Slack/Teams) to update the client on what was fixed, updated, or configured. Ensure tone is appropriate for external communication."
+        elif mode == "readonly_checks":
+            mode_instruction = "READONLY CHECKS MODE: Provide strictly non-destructive commands or scripts (e.g., for AWS CloudShell or direct server access) to check the application configuration, find logs, or verify the current state. Do not include modifying commands."
+        elif mode == "troubleshoot":
+            mode_instruction = "TROUBLESHOOTING MODE: Provide a comprehensive troubleshooting plan. You MUST include: 1) Readonly commands to confirm the issue and gather proof/logs, 2) Exact backup commands and quick restore steps to safely revert, and 3) Post-verification checks to ensure the fix worked."
+        elif mode == "setup_manual":
+            mode_instruction = "MANUAL SETUP MODE: Provide a plan to manually configure the new setup. You MUST include: 1) Readonly compatibility and prerequisite checks on the server/infra, 2) Step-by-step instructions for the Cloud console (AWS/Azure) or server commands, and 3) An estimated cost review."
+        elif mode == "setup_iac":
+            mode_instruction = "IaC SETUP MODE: Provide a code-based setup plan using Terraform/IaC. You MUST include: 1) Readonly compatibility and prerequisite checks, 2) The proper Git code flow (create feature branch, push code, create PR, merge after approval), and 3) An estimated cost review for the infrastructure."
+        else:
+            mode_instruction = "Continue from this task context. Help me decide, implement, debug, write, or plan the next step based on the request I give after this prompt."
+
         parts.extend([
             "",
             "# How I Want You To Help",
-            "Continue from this task context. Help me decide, implement, debug, write, or plan the next step based on the request I give after this prompt.",
+            mode_instruction,
         ])
 
         compact_text = "\n".join(parts)
@@ -312,6 +345,101 @@ def generate_task_context(task_id):
         current_app.logger.exception("Error generating context for task %s", task_id)
         db.session.rollback()
         return jsonify({"success": False, "error": "internal", "message": "see server logs"}), 500
+@api_bp.route("/context/execute-ollama", methods=["POST"])
+def execute_ollama_workflow():
+    try:
+        data = request.get_json() or {}
+        project_id = data.get("project_id")
+        task_id = data.get("task_id")
+        note_text = data.get("note_text", "")
+        mode = data.get("mode", "draft_internal")
+        action_type = data.get("action_type", "execute")
+
+        if not project_id or not note_text:
+            return jsonify({"success": False, "error": "missing_params", "message": "project_id and note_text are required"}), 400
+
+        from backend.models import Project, Task, Prompt, ContextBlock, Decision
+        project = Project.query.get(project_id)
+        if not project:
+            return jsonify({"success": False, "error": "not_found", "message": "Project not found"}), 404
+
+        import requests
+        import json
+
+        active_model = "qwen2.5:3b"
+        try:
+            list_res = requests.get("http://localhost:11434/api/tags", timeout=1.5)
+            if list_res.status_code == 200:
+                models_list = list_res.json().get("models", [])
+                names = [m.get("name") for m in models_list]
+                if names and active_model not in names:
+                    matched = [n for n in names if any(k in n.lower() for k in ["qwen", "phi", "llama", "mistral", "gemma"])]
+                    active_model = matched[0] if matched else names[0]
+        except Exception:
+            pass
+
+        prompt_name = f"techie_{action_type}_{mode}"
+        db_prompt = Prompt.query.filter_by(name=prompt_name).first()
+        
+        if db_prompt:
+            system_prompt = db_prompt.prompt_text
+            # Optional: update usage count
+            db_prompt.usage_count += 1
+            from backend.database import db
+            db.session.commit()
+        else:
+            system_prompt = "You are a helpful technical assistant. Please answer the query based on the project context."
+
+        task_context = ""
+        if task_id:
+            task = Task.query.get(task_id)
+            if task:
+                task_context = f"Task Context: {task.title} (Status: {task.status})\nTask Details: {task.description or 'No additional details'}\n\n"
+
+        project_knowledge = ""
+        cblocks = ContextBlock.query.filter_by(project_id=project.id).all()
+        if cblocks:
+            project_knowledge += "Project Knowledge Blocks:\n" + "\n".join([f"- {c.title}: {c.content}" for c in cblocks]) + "\n\n"
+        
+        decs = Decision.query.filter_by(project_id=project.id).all()
+        if decs:
+            project_knowledge += "Project Decisions:\n" + "\n".join([f"- {d.title}: {d.description} (Status: {d.status})" for d in decs]) + "\n\n"
+
+        if action_type == "execute":
+            user_instruction = f"Execute this request based strictly on the project context above:\n\n{note_text}"
+        else:
+            user_instruction = f"Use this project context and note to generate the AI prompt:\n\n{note_text}"
+
+        if "@coex" in note_text:
+            user_instruction += "\n\nCRITICAL INSTRUCTION: The user has placed a '@coex' tag in the text above. You MUST analyze the specific context, issue, or question immediately preceding the '@coex' tag. Your entire response should be a direct answer, review, or further steps addressing ONLY that specific portion."
+
+        user_content = f"Project: {project.name}\nDescription: {project.description or 'None'}\n\n{project_knowledge}{task_context}{user_instruction}"
+
+        payload = {
+            "model": active_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ],
+            "stream": False,
+            "keep_alive": -1
+        }
+
+        try:
+            res = requests.post("http://localhost:11434/api/chat", json=payload, timeout=45.0)
+            if res.status_code == 200:
+                response_json = res.json()
+                message_content = response_json.get("message", {}).get("content", "").strip()
+                return jsonify({"success": True, "draft": message_content})
+            else:
+                return jsonify({"success": False, "error": "ollama_server_error", "message": f"HTTP {res.status_code}"})
+        except requests.exceptions.Timeout:
+            return jsonify({"success": False, "error": "ollama_timeout", "message": "Ollama timed out."})
+        except requests.exceptions.RequestException:
+            return jsonify({"success": False, "error": "ollama_offline", "message": "Ollama server unreachable."})
+    except Exception:
+        current_app.logger.exception("Error drafting with Ollama")
+        return jsonify({"success": False, "error": "internal"}), 500
 
 
 @api_bp.route("/context/verify-ollama", methods=["POST"])
@@ -409,3 +537,71 @@ def verify_context_ollama():
     except Exception:
         current_app.logger.exception("Error checking leaks with Ollama")
         return jsonify({"success": False, "error": "internal"}), 500
+
+@api_bp.route("/context/summarize-task", methods=["POST"])
+def summarize_task():
+    try:
+        data = request.get_json() or {}
+        note_text = data.get("note_text", "").strip()
+        task_id = data.get("task_id", "").strip()
+
+        if not note_text or not task_id:
+            return jsonify({"success": False, "error": "Missing note_text or task_id"})
+
+        task = Task.query.get(task_id)
+        if not task:
+            return jsonify({"success": False, "error": "Task not found"})
+
+        ollama_url = os.environ.get("OLLAMA_API_URL", "http://127.0.0.1:11434")
+        
+        import requests
+        
+        # Dynamic model selection
+        model = "qwen2.5:3b"
+        try:
+            list_res = requests.get(f"{ollama_url}/api/tags", timeout=1.5)
+            if list_res.status_code == 200:
+                models_list = list_res.json().get("models", [])
+                names = [m.get("name") for m in models_list]
+                if names and model not in names and "qwen2.5:3b" not in names:
+                    matched = [n for n in names if any(k in n.lower() for k in ["qwen", "phi", "llama", "mistral", "gemma"])]
+                    model = matched[0] if matched else names[0]
+        except Exception:
+            model = os.environ.get("OLLAMA_MODEL", "llama3")
+
+        system_prompt = "You are an expert technical assistant. Your objective is to summarize the user's note into a highly concise, single-paragraph progress update. Output ONLY the summary paragraph directly. Do NOT include any conversational preambles, greetings, or conclusions."
+
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Summarize this note to update the task:\n\n{note_text}"}
+            ],
+            "stream": False
+        }
+
+        try:
+            res = requests.post(f"{ollama_url}/api/chat", json=payload, timeout=60)
+            if res.status_code == 200:
+                result = res.json()
+                summary = result.get("message", {}).get("content", "").strip()
+                if summary:
+                    append_text = f"\n\n---\n**Update from Note:**\n{summary}"
+                    if task.description:
+                        task.description += append_text
+                    else:
+                        task.description = append_text
+                    
+                    db.session.commit()
+                    return jsonify({"success": True, "summary": summary})
+                else:
+                    return jsonify({"success": False, "error": "Ollama returned empty response"})
+            else:
+                return jsonify({"success": False, "error": f"Ollama returned HTTP {res.status_code}"})
+        except Exception as e:
+            current_app.logger.warning("Ollama connection failed: %s", str(e))
+            return jsonify({"success": False, "error": "Failed to connect to Ollama"})
+
+    except Exception:
+        current_app.logger.exception("Error summarizing task")
+        return jsonify({"success": False, "error": "Internal server error"}), 500
